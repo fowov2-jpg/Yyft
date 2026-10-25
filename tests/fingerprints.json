@@ -1,0 +1,18 @@
+[
+  {
+    "uri": "vless://01234567-89ab-cdef-0123-456789abcdef@good.example.org:443?security=reality&pbk=abc&sni=example.com#Москва 🇷🇺",
+    "fingerprint": "6c6a8ae570863a7dfb15200305a2761b2b931e4e532e6c494405d351f644648e"
+  },
+  {
+    "uri": "vmess://eyJhZGQiOiAiZ29vZC5leGFtcGxlLm9yZyIsICJwb3J0IjogNDQzLCAiaWQiOiAiMDEyMzQ1NjctODlhYi1jZGVmLTAxMjMtNDU2Nzg5YWJjZGVmIiwgInBzIjogIlx1Njc3MVx1NGVhYyIsICJ0bHMiOiAidGxzIiwgIm5ldCI6ICJ3cyIsICJwYXRoIjogIi92In0#тест",
+    "fingerprint": "516c14051aeea678f405c6cd4bf255c127934c7404e0f186d2defd37462dae4b"
+  },
+  {
+    "uri": "trojan://secret@good.example.org:443?security=tls&sni=example.com#Париж",
+    "fingerprint": "aa4679483031d702cb07f6f1b48452d20ce218a0914af600a419b82d1451b406"
+  },
+  {
+    "uri": "ss://YWVzLTEyOC1nY206c2VjcmV0@good.example.org:443#Санкт-Петербург",
+    "fingerprint": "8af62a9ee84000fc22b0c0d3025ca6c1eea5c600682833f75627f809134eead1"
+  }
+]

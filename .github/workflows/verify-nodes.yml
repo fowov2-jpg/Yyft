@@ -45,6 +45,44 @@ jobs:
       - uses: actions/upload-pages-artifact@v4
         with:
           path: site
+  publish-raw:
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/download-artifact@v4
+        with:
+          name: github-pages
+          path: pages-artifact
+      - name: Mirror verified JSON to public GitHub raw endpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p published
+          tar -xf pages-artifact/artifact.tar -C published
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          feed = json.loads(Path("published/feed.json").read_text(encoding="utf-8"))
+          assert feed["schema"] == 1 and feed["checker"] == "xray-github-actions"
+          assert isinstance(feed["results"], list) and len(feed["results"]) <= 180
+          assert all(set(r) == {"fingerprint", "source_id", "https_ok", "youtube_page_ok", "https_latency_ms", "checked_at"} for r in feed["results"])
+          assert all(len(r["fingerprint"]) == 64 and r["https_ok"] is True for r in feed["results"])
+          assert Path("published/feed.json").stat().st_size <= 256 * 1024
+          PY
+          cp published/feed.json ./feed.json
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add feed.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Update verified public feed"
+            git push origin HEAD:main
+          fi
   deploy:
     needs: verify
     runs-on: ubuntu-24.04

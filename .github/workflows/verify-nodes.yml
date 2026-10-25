@@ -1,0 +1,61 @@
+name: Public VPN ranking (bounded Xray checks)
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 1,7,13,19 * * *'
+  push:
+    branches: [main]
+    paths: ['checker.py', 'tests/**', '.github/workflows/verify-nodes.yml']
+permissions: {}
+concurrency:
+  group: secureconnect-free-pages
+  cancel-in-progress: false
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 24
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run parser, safety and contract tests
+        run: python -m unittest discover -s tests -v
+      - name: Fetch OFFICIAL pinned Xray Linux amd64 container and copy its binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Official, exact release AND immutable Linux/amd64 SHA-256 OCI digest.
+          image='ghcr.io/xtls/xray-core:26.10.21@sha256:447ffc750a0b87d6e4f2c38425f68105bfc8c789e59c22d83b94eb7e1e648c50'
+          docker pull --platform linux/amd64 "$image"
+          cid="$(docker create --platform linux/amd64 "$image")"
+          trap 'docker rm -f "$cid" >/dev/null' EXIT
+          docker cp "$cid:/usr/local/bin/xray" ./xray
+          chmod 700 ./xray
+          ./xray version | head -1
+      - name: Fetch / probe with strict wall clock limit
+        timeout-minutes: 21
+        env:
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
+          PREVIOUS_FEED_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/feed.json
+          XRAY_BIN: ./xray
+        run: timeout --signal=TERM --kill-after=5s 20m python checker.py
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+  deploy:
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      - name: Publish static HTTPS feed
+        id: deploy
+        uses: actions/deploy-pages@v4

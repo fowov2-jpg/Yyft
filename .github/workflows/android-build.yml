@@ -1,0 +1,87 @@
+name: Build SecureConnect Android debug APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'android/source.zip'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: secureconnect-android-apk
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - name: Checkout source archive
+        uses: actions/checkout@v4
+
+      - name: Install JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android API 36
+        run: sdkmanager --install "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Setup Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Unpack SecureConnect project
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -s android/source.zip ]; then
+            echo "::error::Missing android/source.zip. Upload the prepared SecureConnect source archive to android/source.zip first."
+            exit 1
+          fi
+          python - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile
+          archive = Path("android/source.zip")
+          target = Path("android/build-input")
+          target.mkdir(parents=True, exist_ok=True)
+          with ZipFile(archive) as z:
+              for item in z.infolist():
+                  path = target / item.filename
+                  if not path.resolve().is_relative_to(target.resolve()):
+                      raise ValueError("Unsafe zip entry")
+              z.extractall(target)
+          assert (target / "SecureConnect-2.4.6/gradlew").is_file()
+          PY
+          chmod +x android/build-input/SecureConnect-2.4.6/gradlew
+
+      - name: Compile installable debug APK
+        working-directory: android/build-input/SecureConnect-2.4.6
+        run: ./gradlew --no-daemon --stacktrace :app:assembleDebug
+
+      - name: Run Android unit tests
+        working-directory: android/build-input/SecureConnect-2.4.6
+        run: ./gradlew --no-daemon --stacktrace :app:testDebugUnitTest
+
+      - name: Show APK fingerprint
+        if: always()
+        shell: bash
+        run: |
+          if [ -s android/build-input/SecureConnect-2.4.6/app/build/outputs/apk/debug/app-debug.apk ]; then
+            sha256sum android/build-input/SecureConnect-2.4.6/app/build/outputs/apk/debug/app-debug.apk
+          fi
+
+      - name: Upload APK
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SecureConnect-2.4.6-debug-apk
+          path: android/build-input/SecureConnect-2.4.6/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: ignore
+          retention-days: 7

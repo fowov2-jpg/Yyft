@@ -60,31 +60,31 @@ jobs:
                   if not path.resolve().is_relative_to(target.resolve()):
                       raise ValueError("Unsafe zip entry")
               z.extractall(target)
-          assert (target / "SecureConnect-2.4.6/gradlew").is_file()
+          assert (target / "SecureConnect-2.4.7/gradlew").is_file()
           PY
-          chmod +x android/build-input/SecureConnect-2.4.6/gradlew
+          chmod +x android/build-input/SecureConnect-2.4.7/gradlew
 
       - name: Compile installable debug APK
-        working-directory: android/build-input/SecureConnect-2.4.6
+        working-directory: android/build-input/SecureConnect-2.4.7
         run: ./gradlew --no-daemon --stacktrace :app:assembleDebug
 
       - name: Run Android unit tests
-        working-directory: android/build-input/SecureConnect-2.4.6
+        working-directory: android/build-input/SecureConnect-2.4.7
         run: ./gradlew --no-daemon --stacktrace :app:testDebugUnitTest
 
       - name: Show APK fingerprint
         if: always()
         shell: bash
         run: |
-          if [ -s android/build-input/SecureConnect-2.4.6/app/build/outputs/apk/debug/app-debug.apk ]; then
-            sha256sum android/build-input/SecureConnect-2.4.6/app/build/outputs/apk/debug/app-debug.apk
+          if [ -s android/build-input/SecureConnect-2.4.7/app/build/outputs/apk/debug/app-debug.apk ]; then
+            sha256sum android/build-input/SecureConnect-2.4.7/app/build/outputs/apk/debug/app-debug.apk
           fi
 
       - name: Upload APK
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: SecureConnect-2.4.6-debug-apk
-          path: android/build-input/SecureConnect-2.4.6/app/build/outputs/apk/debug/app-debug.apk
+          name: SecureConnect-2.4.7-debug-apk
+          path: android/build-input/SecureConnect-2.4.7/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: ignore
           retention-days: 7

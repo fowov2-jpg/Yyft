@@ -38,6 +38,8 @@ SOURCES = {
 }
 MAX_PER_RUN = 24
 MAX_RESULTS = 180
+MAX_PUBLIC_CANDIDATES = 24
+MAX_PUBLIC_CANDIDATES_BYTES = 128 * 1024
 MAX_SOURCE_BYTES = 1024 * 1024
 MAX_FEED_BYTES = 256 * 1024
 MAX_SOURCE_LINKS = 600
@@ -358,6 +360,43 @@ def pack_feed(checked, previous, now):
         raise ValueError("feed exceeded 256 KiB")
     return output
 
+def pack_public_candidates(checked, sampled, now):
+    """Publish only public allowlisted GitHub subscription URIs verified THIS run.
+
+    Public subscription credentials are intentionally public. Never include
+    manually imported, private or user-supplied configurations.
+    """
+    by_hash = {r["fingerprint"]: r for r in sampled}
+    ok = sorted((r for r in checked if r["https_ok"] is True),
+                key=lambda r: (not r["youtube_page_ok"], r["https_latency_ms"] or 30000))
+    entries = []
+    for result in ok:
+        origin = by_hash.get(result["fingerprint"])
+        if not origin or origin["source_id"] not in SOURCES:
+            continue
+        uri = origin["raw"].strip().split("#", 1)[0]
+        if len(uri.encode("utf-8")) > 4096 or uri.split("://", 1)[0].lower() not in ALLOWED_SCHEMES:
+            continue
+        if fingerprint(uri) != result["fingerprint"]:
+            continue
+        entries.append({
+            "fingerprint": result["fingerprint"],
+            "source_id": origin["source_id"],
+            "uri": uri,
+            "https_latency_ms": result["https_latency_ms"],
+            "youtube_page_ok": result["youtube_page_ok"],
+            "checked_at": iso(now),
+        })
+        if len(entries) >= MAX_PUBLIC_CANDIDATES:
+            break
+    payload = json.dumps({"schema": 1, "checker": "xray-github-actions",
+        "generated_at": iso(now), "valid_until": iso(now + timedelta(hours=2)),
+        "candidates": entries}, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    if len(payload) > MAX_PUBLIC_CANDIDATES_BYTES:
+        raise ValueError("candidate feed exceeds 128 KiB")
+    return payload
+
+
 def load_previous(url, now):
     if not url:
         return {}
@@ -426,6 +465,7 @@ def main():
     output_dir = Path(os.environ.get("OUTPUT_DIR", "site"))
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / "feed.json").write_bytes(packed)
+    (output_dir / "candidates.json").write_bytes(pack_public_candidates(checked, sampled, now))
     (output_dir / ".nojekyll").write_text("", encoding="utf-8")
     print(f"sampled={len(sampled)} tested={len(checked)} passing={sum(r['https_ok'] for r in checked)} bytes={len(packed)} elapsed_s={int(time.monotonic()-start)}")
 

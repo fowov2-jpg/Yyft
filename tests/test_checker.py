@@ -85,6 +85,27 @@ class ContractTest(unittest.TestCase):
         self.assertEqual(json.loads(checker.pack_feed([],{},NOW))['results'],[])
         self.assertEqual(json.loads(checker.pack_feed([],{},NOW))['schema'],1)
 
+    def test_public_candidate_feed_only_real_positive_public_sources(self):
+        a, b = LINKS[:2]
+        sampled = [{"fingerprint": checker.fingerprint(a), "source_id": "avia", "raw": a},
+                   {"fingerprint": checker.fingerprint(b), "source_id": "hamed", "raw": b}]
+        checked = [{"fingerprint": checker.fingerprint(a), "https_ok": True, "youtube_page_ok": True,
+                    "https_latency_ms": 120},
+                   {"fingerprint": checker.fingerprint(b), "https_ok": False, "youtube_page_ok": False,
+                    "https_latency_ms": None}]
+        result = json.loads(checker.pack_public_candidates(checked, sampled, NOW))
+        self.assertEqual(len(result["candidates"]), 1)
+        self.assertEqual(result["candidates"][0]["uri"], a.split("#")[0])
+        self.assertEqual(result["candidates"][0]["fingerprint"], checker.fingerprint(a))
+        self.assertEqual(result["valid_until"], checker.iso(NOW + timedelta(hours=2)))
+
+    def test_public_candidate_feed_rejects_unknown_sources(self):
+        a = LINKS[0]
+        sampled = [{"fingerprint": checker.fingerprint(a), "source_id": "other", "raw": a}]
+        checked = [{"fingerprint": checker.fingerprint(a), "https_ok": True,
+                    "youtube_page_ok": True, "https_latency_ms": 120}]
+        self.assertEqual(json.loads(checker.pack_public_candidates(checked, sampled, NOW))["candidates"], [])
+
     def test_feed_no_secrets_and_bounded(self):
         node = {'fingerprint':'b'*64,'source_id':'3inker','https_ok':True,'youtube_page_ok':True,'https_latency_ms':200}
         result = checker.pack_feed([node],{},NOW)

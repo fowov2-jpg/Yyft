@@ -2,10 +2,10 @@ name: Public VPN ranking (bounded Xray checks)
 on:
   workflow_dispatch:
   schedule:
-    - cron: '23 1,7,13,19 * * *'
+    - cron: '23 * * * *'
   push:
     branches: [main]
-    paths: ['checker.py', 'tests/**', '.github/workflows/verify-nodes.yml']
+    paths: ['checker.py', 'tests/**', '.github/workflows/verify-nodes.yml', 'ops/hourly-trigger.txt']
 permissions: {}
 concurrency:
   group: secureconnect-free-pages

@@ -24,3 +24,7 @@
 **Важно:** Cloud `https_ok` повышает приоритет выбора, но приложение обязано локально перепроверять сервер. `youtube_page_ok` не подтверждает скорость 720p и не доказывает отсутствие утечек.
 
 Первый Actions-run [№ 1](https://github.com/fowov2-jpg/Yyft/actions/runs/40227569438) проверил 80 кандидатов, 28 успешно. Второй [№ 2](https://github.com/fowov2-jpg/Yyft/actions/runs/40228043207) подтвердил автоматическое обновление `feed.json`. Job `deploy` до активации Pages возвращает 404 — не считайте GitHub Pages уже включённым.
+
+## Hourly lightweight verification
+
+GitHub Actions runs at minute 23 of each UTC hour (GitHub may delay schedules). Each run samples up to 24 public candidates with two workers. `ops/hourly-trigger.txt` is an explicit, optional manual/fallback push trigger. The ChatGPT hourly check should only use it when the feed is stale and no run is active. Running the workflow remains subject to GitHub Actions usage policy. No paid components are required.

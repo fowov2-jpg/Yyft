@@ -36,7 +36,7 @@ SOURCES = {
     "ebrasha": ["https://raw.githubusercontent.com/ebrasha/free-v2ray-public-list/main/vless_configs.txt"],
     "mohammad": ["https://raw.githubusercontent.com/MohammadBahemmat/V2ray-Collector/main/Tested.txt"],
 }
-MAX_PER_RUN = 80
+MAX_PER_RUN = 24
 MAX_RESULTS = 180
 MAX_SOURCE_BYTES = 1024 * 1024
 MAX_FEED_BYTES = 256 * 1024

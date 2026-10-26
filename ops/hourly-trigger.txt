@@ -1,0 +1,3 @@
+Manual fallback trigger for SecureConnect hourly verification.
+Never commit secrets or private VPN URIs.
+Initial setup: 2026-10-26.

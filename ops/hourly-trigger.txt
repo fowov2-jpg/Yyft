@@ -5,3 +5,4 @@ Fallback requested: 2026-10-26T21:13:29Z — no new successful publication for >
 Fallback requested: 2026-10-27T00:19:07Z — no new successful publication for >70 minutes; latest successful run 2026-10-26T22:47:20Z, candidates still valid but hourly refresh overdue.
 Fallback requested: 2026-10-27T04:21:40Z — last successful verification 2026-10-27T02:46:22Z, >70 minutes ago; both JSON last generated 2026-10-27T02:45:47Z, candidates refresh overdue.
 Fallback requested: 2026-10-27T06:20:00Z — latest successful verification 2026-10-27T04:22:49Z (>70 minutes ago); no active runs; candidates.json approaching expiry at 06:21:53Z; hourly publication overdue.
+Fallback requested: 2026-10-27T10:14:09Z — last successful verification 2026-10-27T08:04:47Z (>70 minutes ago); candidates.json expired at 2026-10-27T10:04:03Z; no active runs; hourly refresh overdue.

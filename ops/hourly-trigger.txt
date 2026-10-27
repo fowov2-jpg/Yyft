@@ -2,3 +2,4 @@ Manual fallback trigger for SecureConnect hourly verification.
 Never commit secrets or private VPN URIs.
 Initial setup: 2026-10-26.
 Fallback requested: 2026-10-26T21:13:29Z — no new successful publication for >70 minutes; previous run 2026-10-26T19:32:27Z.
+Fallback requested: 2026-10-27T00:19:07Z — no new successful publication for >70 minutes; latest successful run 2026-10-26T22:47:20Z, candidates still valid but hourly refresh overdue.

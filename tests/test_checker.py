@@ -166,6 +166,44 @@ class ContractTest(unittest.TestCase):
                     "youtube_page_ok": True, "https_latency_ms": 120}]
         self.assertEqual(json.loads(checker.pack_public_candidates(checked, sampled, NOW))["candidates"], [])
 
+    def test_real_xray_restart_selection_diverse_and_bounded(self):
+        inputs = []
+        results = []
+        for i, source in enumerate(["avia", "radikal", "hamed", "avia", "3inker", "telega_ru"]):
+            uri = f"vless://{UUID}@example.com:443?security=tls&sni=a.example.com&seed={i}"
+            fp = checker.fingerprint(uri)
+            inputs.append({"fingerprint": fp, "source_id": source, "raw": uri})
+            results.append({"fingerprint": fp, "source_id": source, "https_ok": True,
+                            "youtube_page_ok": True, "https_latency_ms": 100+i})
+        called = []
+        def runner(item, xray):
+            called.append((item["source_id"], xray))
+            return {"https_ok": True, "https_latency_ms": 245}
+        records = checker.check_xray_restarts(results, inputs, "/tmp/xray", NOW, runner)
+        self.assertEqual(len(records), checker.MAX_RESTART_CHECKS)
+        self.assertEqual(len({r["source_id"] for r in records}), len(records))
+        self.assertEqual(len(called), len(records))
+        self.assertTrue(all(r["restart_ok"] for r in records))
+        self.assertFalse(any("raw" in r or "uri" in r for r in records))
+        packed = json.loads(checker.pack_xray_restarts(records, NOW))
+        self.assertFalse(packed["android_tun_tested"])
+        self.assertEqual(packed["kind"], "xray_process_restart")
+        self.assertEqual(len(packed["results"]), 3)
+
+    def test_restart_failure_remains_failure(self):
+        uri = LINKS[0]
+        item = {"fingerprint":checker.fingerprint(uri), "source_id":"avia", "raw":uri}
+        ok = {"fingerprint":item["fingerprint"], "source_id":"avia",
+              "https_ok":True, "https_latency_ms":101}
+        r = checker.check_xray_restarts([ok], [item], "/tmp/xray", NOW,
+                                       lambda item, bin: {"https_ok":False,"https_latency_ms":None})
+        self.assertEqual(len(r), 1)
+        self.assertFalse(r[0]["restart_ok"])
+        self.assertIsNone(r[0]["restart_https_latency_ms"])
+        self.assertNotIn("secret", checker.pack_xray_restarts(r, NOW).decode())
+        with self.assertRaises(ValueError):
+            checker.pack_xray_restarts([{**r[0], "uri": uri}], NOW)
+
     def test_feed_no_secrets_and_bounded(self):
         node = {'fingerprint':'b'*64,'source_id':'3inker','https_ok':True,'youtube_page_ok':True,'https_latency_ms':200}
         result = checker.pack_feed([node],{},NOW)

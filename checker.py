@@ -49,6 +49,7 @@ MAX_SOURCE_BYTES = 1024 * 1024
 MAX_FEED_BYTES = 256 * 1024
 MAX_SOURCE_LINKS = 600
 MAX_WORKERS = 2
+MAX_RESTART_CHECKS = 3  # Extra real Xray launches, bounded per hour
 RESULT_TTL = timedelta(hours=8)
 PUBLICATION_TTL = timedelta(hours=6)
 ALLOWED_SCHEMES = {"vless", "vmess", "trojan", "ss"}
@@ -472,6 +473,78 @@ def pick_balanced(collected, run_number, max_items=MAX_PER_RUN):
             break
     return output
 
+def check_xray_restarts(checked, sampled, xray, now, probe=None):
+    """Re-launch Xray for up to 3 previously passing routes, across sources.
+
+    Each test_candidate invocation starts and stops a NEW Xray process with
+    an independent SOCKS/HTTPS session. This measures runner-side restart
+    resilience, NOT Android TUN failover or local-network reachability.
+    No VPN credentials or raw URIs are written to the result.
+    """
+    if probe is None:
+        probe = test_candidate
+    originals = {r["fingerprint"]: r for r in sampled}
+    ordered = sorted(
+        (r for r in checked if r.get("https_ok") is True and r.get("fingerprint") in originals),
+        key=lambda r: (r.get("https_latency_ms") if type(r.get("https_latency_ms")) is int else 30000, r["source_id"]),
+    )
+    chosen = []
+    used_sources = set()
+    for result in ordered:
+        source_id = originals[result["fingerprint"]]["source_id"]
+        if source_id in used_sources:
+            continue
+        chosen.append(originals[result["fingerprint"]])
+        used_sources.add(source_id)
+        if len(chosen) >= MAX_RESTART_CHECKS:
+            break
+    records = []
+    for item in chosen:
+        try:
+            retry = probe(item, xray)
+            ok = retry.get("https_ok") is True and type(retry.get("https_latency_ms")) is int and retry["https_latency_ms"] >= 0
+        except (OSError, ValueError, TypeError, KeyError, subprocess.SubprocessError):
+            retry, ok = {}, False
+        records.append({
+            "fingerprint": item["fingerprint"],
+            "source_id": item["source_id"],
+            "restart_ok": ok,
+            "restart_https_latency_ms": retry.get("https_latency_ms") if ok else None,
+            "checked_at": iso(now),
+        })
+    return records
+
+
+def pack_xray_restarts(records, now):
+    """Independent diagnostic feed; immutable existing Android feed schemas."""
+    clean = []
+    for row in records[:MAX_RESTART_CHECKS]:
+        if not isinstance(row, dict) or set(row) != {
+            "fingerprint", "source_id", "restart_ok", "restart_https_latency_ms", "checked_at"
+        }:
+            raise ValueError("invalid Xray restart result shape")
+        if not isinstance(row["fingerprint"], str) or not FINGERPRINT_RE.fullmatch(row["fingerprint"]):
+            raise ValueError("invalid fingerprint")
+        if row["source_id"] not in SOURCES or type(row["restart_ok"]) is not bool:
+            raise ValueError("invalid restart status")
+        if row["restart_ok"] and (type(row["restart_https_latency_ms"]) is not int or row["restart_https_latency_ms"] < 0):
+            raise ValueError("invalid successful latency")
+        if not row["restart_ok"] and row["restart_https_latency_ms"] is not None:
+            raise ValueError("invalid failed latency")
+        if row["checked_at"] != iso(now):
+            raise ValueError("invalid restart checked_at")
+        clean.append(row)
+    payload = json.dumps({
+        "schema": 1, "checker": "xray-github-actions",
+        "kind": "xray_process_restart", "android_tun_tested": False,
+        "generated_at": iso(now), "valid_until": iso(now + timedelta(hours=2)),
+        "results": clean
+    }, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    if len(payload) > 8192:
+        raise ValueError("oversize Xray restart diagnostics")
+    return payload
+
+
 def main():
     now = datetime.now(timezone.utc)
     run_number = int(os.environ.get("GITHUB_RUN_NUMBER", "1"))
@@ -500,6 +573,11 @@ def main():
     (output_dir / "feed.json").write_bytes(packed)
     previous_candidates = load_previous(os.environ.get("PREVIOUS_CANDIDATES_URL", ""), now)
     (output_dir / "candidates.json").write_bytes(pack_public_candidates(checked, sampled, now, previous_candidates))
+    # Restart a fresh Xray process for up to 3 positive routes from distinct sources.
+    restart_results = check_xray_restarts(checked, sampled, xray, now)
+    (output_dir / "restarts.json").write_bytes(pack_xray_restarts(restart_results, now))
+    print(f"xray_restart_checks={len(restart_results)} restart_success={sum(r['restart_ok'] for r in restart_results)}")
+
     (output_dir / ".nojekyll").write_text("", encoding="utf-8")
     print(f"sampled={len(sampled)} tested={len(checked)} passing={sum(r['https_ok'] for r in checked)} bytes={len(packed)} elapsed_s={int(time.monotonic()-start)}")
 

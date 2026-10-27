@@ -89,11 +89,22 @@ jobs:
               e["uri"].startswith(("vless://", "vmess://", "trojan://", "ss://"))
               for e in entries)
           PY
+          python - <<'PY'
+          from pathlib import Path
+          import json
+          obj = json.loads(Path("published/restarts.json").read_text(encoding="utf-8"))
+          assert obj["schema"] == 1 and obj["kind"] == "xray_process_restart"
+          assert obj["android_tun_tested"] is False
+          assert len(obj["results"]) <= 3
+          assert all(set(r) == {"fingerprint", "source_id", "restart_ok", "restart_https_latency_ms", "checked_at"} for r in obj["results"])
+          assert Path("published/restarts.json").stat().st_size <= 8192
+          PY
+          cp published/restarts.json ./restarts.json
           cp published/candidates.json ./candidates.json
           cp published/feed.json ./feed.json
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add feed.json candidates.json
+          git add feed.json candidates.json restarts.json
           if ! git diff --cached --quiet; then
             git commit -m "Update verified public feed"
             git push origin HEAD:main

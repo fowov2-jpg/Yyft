@@ -40,6 +40,7 @@ jobs:
         env:
           GITHUB_RUN_NUMBER: ${{ github.run_number }}
           PREVIOUS_FEED_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/feed.json
+          PREVIOUS_CANDIDATES_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/candidates.json
           XRAY_BIN: ./xray
         run: timeout --signal=TERM --kill-after=5s 20m python checker.py
       - uses: actions/upload-pages-artifact@v4

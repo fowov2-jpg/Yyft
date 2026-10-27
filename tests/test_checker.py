@@ -131,6 +131,34 @@ class ContractTest(unittest.TestCase):
         self.assertEqual(result["candidates"][0]["fingerprint"], checker.fingerprint(a))
         self.assertEqual(result["valid_until"], checker.iso(NOW + timedelta(hours=2)))
 
+    def test_recent_candidates_preserved_but_failures_removed(self):
+        uri = LINKS[0].split("#")[0]
+        fp = checker.fingerprint(uri)
+        saved_time = checker.iso(NOW-timedelta(minutes=55))
+        previous = {"schema":1, "checker":"xray-github-actions", "candidates":[{
+            "fingerprint":fp, "source_id":"avia", "uri":uri, "https_latency_ms":111,
+            "youtube_page_ok":True, "checked_at":saved_time
+        }]}
+        retained = json.loads(checker.pack_public_candidates([], [], NOW, previous))["candidates"]
+        self.assertEqual(len(retained), 1)
+        self.assertEqual(retained[0]["checked_at"], saved_time)
+        failed = [{"fingerprint":fp,"https_ok":False}]
+        self.assertEqual(json.loads(checker.pack_public_candidates(failed, [], NOW, previous))["candidates"],[])
+        previous["candidates"][0]["checked_at"] = checker.iso(NOW-timedelta(hours=2,seconds=1))
+        self.assertEqual(json.loads(checker.pack_public_candidates([], [], NOW, previous))["candidates"],[])
+
+    def test_recent_candidates_reject_altered_uri_or_metadata(self):
+        uri = LINKS[0].split("#")[0]
+        item = {"fingerprint":checker.fingerprint(uri),"source_id":"avia",
+                "uri":uri,"https_latency_ms":90,"youtube_page_ok":True,
+                "checked_at":checker.iso(NOW)}
+        for changes in ({"uri":"vless://changed@example.com:443"},
+                        {"source_id":"other"}, {"https_latency_ms":0},
+                        {"checked_at":checker.iso(NOW+timedelta(minutes=10))}):
+            previous = {"schema":1, "checker":"xray-github-actions",
+                        "candidates":[{**item,**changes}]}
+            self.assertEqual(json.loads(checker.pack_public_candidates([],[],NOW,previous))["candidates"], [])
+
     def test_public_candidate_feed_rejects_unknown_sources(self):
         a = LINKS[0]
         sampled = [{"fingerprint": checker.fingerprint(a), "source_id": "other", "raw": a}]

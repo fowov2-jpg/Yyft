@@ -55,6 +55,11 @@ replace(anchor, """        if (publicCandidatesJob?.isActive != true) {
     fun request(""")
 scanner.write_text(text, encoding="utf-8")
 shutil.copyfile(source, target)
+# Deterministic Android JVM regression tests: no emulator and no third-party VPN traffic.
+regression = root / "app/src/test/java/com/secureconnect/app/viewmodel/RecoveryFlowRegressionTest.kt"
+regression.parent.mkdir(parents=True, exist_ok=True)
+shutil.copyfile(Path(__file__).with_name("RecoveryFlowRegressionTest.kt"), regression)
+
 body = gradle.read_text(encoding="utf-8")
 assert 'versionName = "2.4.7"' in body and 'versionCode = 253' in body
 gradle.write_text(body.replace('versionCode = 253','versionCode = 254')

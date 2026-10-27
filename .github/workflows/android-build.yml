@@ -76,6 +76,25 @@ jobs:
         working-directory: android/build-input/SecureConnect-2.4.7
         run: ./gradlew --no-daemon --stacktrace :app:testDebugUnitTest
 
+      - name: Audit debug APK permissions, VPN service and APK signature
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk="android/build-input/SecureConnect-2.4.7/app/build/outputs/apk/debug/app-debug.apk"
+          aapt="$ANDROID_HOME/build-tools/36.0.0/aapt"
+          signer="$ANDROID_HOME/build-tools/36.0.0/apksigner"
+          test -s "$apk"
+          "$aapt" dump badging "$apk" | head -5
+          "$aapt" dump permissions "$apk" | tee /tmp/secureconnect-apk-permissions.txt
+          "$aapt" dump xmltree "$apk" AndroidManifest.xml > /tmp/secureconnect-manifest.txt
+          grep -q 'android.permission.BIND_VPN_SERVICE' /tmp/secureconnect-manifest.txt
+          if grep -Eq 'android.permission.(READ_SMS|READ_CONTACTS|RECORD_AUDIO|CAMERA|REQUEST_INSTALL_PACKAGES|SYSTEM_ALERT_WINDOW)' /tmp/secureconnect-apk-permissions.txt; then
+            echo "::error::Unapproved sensitive permission detected in APK"
+            exit 1
+          fi
+          "$signer" verify --verbose --print-certs "$apk"
+          echo "::warning::This APK uses a debug signing certificate. CI audit does not certify Play Protect safety."
+
       - name: Show APK fingerprint
         if: always()
         shell: bash

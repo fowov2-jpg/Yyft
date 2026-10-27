@@ -38,7 +38,7 @@ SOURCES = {
     # Newly verified public GitHub sources. Their update cadence is not proof of local reachability.
     "telega_ru": ["https://raw.githubusercontent.com/TelegaVPN/free-vpn-keys/main/sub/base64/for-russia.txt",
                   "https://raw.githubusercontent.com/TelegaVPN/free-vpn-keys/main/sub/base64/all.txt"],
-    "au1rxx_vless": ["https://raw.githubusercontent.com/Au1rxx/free-vpn-subscriptions/main/output/protocol/vless/v2ray-base64-0001.txt"],
+    "au1rxx": ["https://raw.githubusercontent.com/Au1rxx/free-vpn-subscriptions/main/output/protocol/vless/v2ray-base64-0001.txt"],
 
 }
 MAX_PER_RUN = 24

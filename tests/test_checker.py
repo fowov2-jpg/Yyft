@@ -73,8 +73,20 @@ class ContractTest(unittest.TestCase):
         self.assertLessEqual(checker.MAX_WORKERS,2)
         self.assertLessEqual(checker.MAX_PER_RUN,80)
 
+    def test_public_candidate_source_ids_accepted_by_android_248(self):
+        # Version 2.4.8 accepts existing ConfigSources ids, not arbitrary source ids.
+        # Telega requires a new Android app build to become directly importable.
+        self.assertIn("au1rxx", checker.SOURCES)
+        self.assertNotIn("au1rxx_vless", checker.SOURCES)
+        candidate = LINKS[0]
+        sampled = [{"source_id": "au1rxx", "fingerprint": checker.fingerprint(candidate), "raw": candidate}]
+        checked = [{"fingerprint": checker.fingerprint(candidate), "https_ok": True,
+                    "youtube_page_ok": False, "https_latency_ms": 230}]
+        result = json.loads(checker.pack_public_candidates(checked, sampled, NOW))
+        self.assertEqual([c["source_id"] for c in result["candidates"]], ["au1rxx"])
+
     def test_additional_sources_are_fixed_public_https_only(self):
-        for source in ("telega_ru", "au1rxx_vless"):
+        for source in ("telega_ru", "au1rxx"):
             self.assertIn(source, checker.SOURCES)
             self.assertLessEqual(len(checker.SOURCES[source]), 2)
             for url in checker.SOURCES[source]:
@@ -85,7 +97,7 @@ class ContractTest(unittest.TestCase):
 
     def test_new_source_rotation_no_special_trust(self):
         sample = {sid: [LINKS[i % len(LINKS)] + f"&probe={i}#{sid}"]
-                  for i, sid in enumerate(["telega_ru", "au1rxx_vless", "radikal", "morpheus"])}
+                  for i, sid in enumerate(["telega_ru", "au1rxx", "radikal", "morpheus"])}
         chosen = checker.pick_balanced(sample, 31, 4)
         self.assertEqual({entry["source_id"] for entry in chosen}, set(sample))
         self.assertEqual(len({entry["fingerprint"] for entry in chosen}), 4)

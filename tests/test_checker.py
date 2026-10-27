@@ -73,6 +73,26 @@ class ContractTest(unittest.TestCase):
         self.assertLessEqual(checker.MAX_WORKERS,2)
         self.assertLessEqual(checker.MAX_PER_RUN,80)
 
+    def test_additional_sources_are_fixed_public_https_only(self):
+        for source in ("telega_ru", "au1rxx_vless"):
+            self.assertIn(source, checker.SOURCES)
+            self.assertLessEqual(len(checker.SOURCES[source]), 2)
+            for url in checker.SOURCES[source]:
+                self.assertTrue(url.startswith("https://raw.githubusercontent.com/"))
+                self.assertNotIn("?", url)
+        self.assertLessEqual(checker.MAX_PER_RUN, 24)
+        self.assertLessEqual(checker.MAX_WORKERS, 2)
+
+    def test_new_source_rotation_no_special_trust(self):
+        sample = {sid: [LINKS[i % len(LINKS)] + f"&probe={i}#{sid}"]
+                  for i, sid in enumerate(["telega_ru", "au1rxx_vless", "radikal", "morpheus"])}
+        chosen = checker.pick_balanced(sample, 31, 4)
+        self.assertEqual({entry["source_id"] for entry in chosen}, set(sample))
+        self.assertEqual(len({entry["fingerprint"] for entry in chosen}), 4)
+        for entry in chosen:
+            self.assertFalse("https_ok" in entry)
+        self.assertFalse(checker.pack_public_candidates([], chosen, NOW).find(b'"uri"') >= 0)
+
     def test_ttl_and_known_failure_no_false_liveness(self):
         base = {'fingerprint':'a'*64,'source_id':'3inker','https_ok':True,'youtube_page_ok':False,'https_latency_ms':120,'checked_at':checker.iso(NOW-timedelta(hours=2))}
         prev = {'schema':1,'results':[base]}

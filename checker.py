@@ -365,7 +365,7 @@ def pack_feed(checked, previous, now):
         raise ValueError("feed exceeded 256 KiB")
     return output
 
-def pack_public_candidates(checked, sampled, now):
+def pack_public_candidates(checked, sampled, now, previous=None):
     """Publish only public allowlisted GitHub subscription URIs verified THIS run.
 
     Public subscription credentials are intentionally public. Never include
@@ -394,6 +394,34 @@ def pack_public_candidates(checked, sampled, now):
         })
         if len(entries) >= MAX_PUBLIC_CANDIDATES:
             break
+    # Rolling two-hour pool; never extend the original checked_at.
+    failed = {r["fingerprint"] for r in checked if r.get("https_ok") is not True}
+    known = {r["fingerprint"] for r in entries}
+    if isinstance(previous, dict) and previous.get("schema") == 1 and previous.get("checker") == "xray-github-actions":
+        old = previous.get("candidates", [])
+        if isinstance(old, list):
+            for item in old[:MAX_PUBLIC_CANDIDATES]:
+                if not isinstance(item, dict) or set(item) != {"fingerprint", "source_id", "uri", "https_latency_ms", "youtube_page_ok", "checked_at"}:
+                    continue
+                fp, uri = item["fingerprint"], item["uri"]
+                if not isinstance(fp, str) or not FINGERPRINT_RE.fullmatch(fp) or fp in failed or fp in known:
+                    continue
+                if not isinstance(uri, str) or not 20 <= len(uri.encode("utf-8")) <= 4096 or "#" in uri or fingerprint(uri) != fp:
+                    continue
+                if uri.split("://", 1)[0].lower() not in ALLOWED_SCHEMES or item["source_id"] not in SOURCES:
+                    continue
+                if type(item["youtube_page_ok"]) is not bool or type(item["https_latency_ms"]) is not int or not 1 <= item["https_latency_ms"] <= 30000:
+                    continue
+                try:
+                    checked_at = parse_iso(item["checked_at"])
+                except (ValueError, TypeError):
+                    continue
+                if not timedelta(0) <= now - checked_at < timedelta(hours=2):
+                    continue
+                entries.append(item)
+                known.add(fp)
+    entries.sort(key=lambda r: (not r["youtube_page_ok"], r["https_latency_ms"], r["source_id"]))
+    entries = entries[:MAX_PUBLIC_CANDIDATES]
     payload = json.dumps({"schema": 1, "checker": "xray-github-actions",
         "generated_at": iso(now), "valid_until": iso(now + timedelta(hours=2)),
         "candidates": entries}, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
@@ -406,7 +434,7 @@ def load_previous(url, now):
     if not url:
         return {}
     p = urlsplit(url)
-    if p.scheme != "https" or not p.hostname or not p.hostname.endswith(".github.io") or not p.path.endswith("/feed.json"):
+    if p.scheme != "https" or not p.hostname or not p.hostname.endswith(".github.io") or not p.path.endswith(("/feed.json", "/candidates.json")):
         return {}
     try:
         with OPENER.open(Request(url, headers={"User-Agent": "SecureConnect-Checker/1"}), timeout=6) as resp:
@@ -470,7 +498,8 @@ def main():
     output_dir = Path(os.environ.get("OUTPUT_DIR", "site"))
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / "feed.json").write_bytes(packed)
-    (output_dir / "candidates.json").write_bytes(pack_public_candidates(checked, sampled, now))
+    previous_candidates = load_previous(os.environ.get("PREVIOUS_CANDIDATES_URL", ""), now)
+    (output_dir / "candidates.json").write_bytes(pack_public_candidates(checked, sampled, now, previous_candidates))
     (output_dir / ".nojekyll").write_text("", encoding="utf-8")
     print(f"sampled={len(sampled)} tested={len(checked)} passing={sum(r['https_ok'] for r in checked)} bytes={len(packed)} elapsed_s={int(time.monotonic()-start)}")
 

@@ -92,8 +92,13 @@ patch_vm("""                        autoSelection.cancel()
 
 patch_vm("""        // VPN is latency-sensitive. Stop subscription refresh/probing so one of""",
 """        // One button keeps requesting safe candidates after the initial quick wave.
-        if (_connectionMode.value == ConnectionMode.AUTO) {
+        if (_connectionMode.value == ConnectionMode.AUTO && TlsRiskStore.currentApprovedServerId() == null) {
             oneTapWanted = true
+            oneTapRetryJob?.cancel()
+            oneTapRetryJob = null
+        } else if (TlsRiskStore.currentApprovedServerId() != null) {
+            // A one-time explicit risky TLS approval is NOT permission for unattended retries.
+            oneTapWanted = false
             oneTapRetryJob?.cancel()
             oneTapRetryJob = null
         }

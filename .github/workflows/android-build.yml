@@ -76,6 +76,11 @@ jobs:
           cp android/ci-tests/CiFailureRecoveryMatrixTest.kt \
              android/build-input/SecureConnect-2.4.7/app/src/test/java/com/secureconnect/app/vpn/CiFailureRecoveryMatrixTest.kt
 
+      - name: Install one-tap retry policy unit tests
+        run: |
+          set -euo pipefail
+          cp android/ci-tests/OneTapRetryPolicyTest.kt android/build-input/SecureConnect-2.4.7/app/src/test/java/com/secureconnect/app/viewmodel/OneTapRetryPolicyTest.kt
+
       - name: Compile installable debug APK
         working-directory: android/build-input/SecureConnect-2.4.7
         run: ./gradlew --no-daemon --stacktrace :app:assembleDebug

@@ -65,3 +65,168 @@ assert 'versionName = "2.4.7"' in body and 'versionCode = 253' in body
 gradle.write_text(body.replace('versionCode = 253','versionCode = 254')
     .replace('versionName = "2.4.7"','versionName = "2.4.8"'), encoding="utf-8")
 print("SecureConnect 2.4.8 one-tap patch applied")
+
+# One-tap recovery (bounded retry waves); this is a ViewModel-lifetime policy.
+vm_path = root / "app/src/main/java/com/secureconnect/app/viewmodel/MainViewModel.kt"
+vm = vm_path.read_text(encoding="utf-8")
+def patch_vm(old, new):
+    global vm
+    if vm.count(old) != 1:
+        raise RuntimeError("Unexpected MainViewModel anchor: " + old[:75])
+    vm = vm.replace(old, new, 1)
+
+patch_vm("    private var connectJob: Job? = null",
+"""    private var oneTapWanted = false
+    private var oneTapRetryRounds = 0
+    private var oneTapRetryJob: Job? = null
+    private var connectJob: Job? = null""")
+
+patch_vm("""                        autoSelection.cancel()
+                        _isConnecting.value = false""",
+"""                        autoSelection.cancel()
+                        oneTapWanted = false
+                        oneTapRetryRounds = 0
+                        oneTapRetryJob?.cancel()
+                        oneTapRetryJob = null
+                        _isConnecting.value = false""")
+
+patch_vm("""        // VPN is latency-sensitive. Stop subscription refresh/probing so one of""",
+"""        // One button keeps requesting safe candidates after the initial quick wave.
+        if (_connectionMode.value == ConnectionMode.AUTO) {
+            oneTapWanted = true
+            oneTapRetryJob?.cancel()
+            oneTapRetryJob = null
+        }
+
+        // VPN is latency-sensitive. Stop subscription refresh/probing so one of""")
+
+patch_vm("""                    connectJob = null
+                    checkServers()
+                }
+            }
+        }
+    }
+
+    private suspend fun connectInternal""",
+"""                    connectJob = null
+                    checkServers()
+                    scheduleOneTapRetry(generation)
+                }
+            }
+        }
+    }
+
+    private suspend fun connectInternal""")
+
+patch_vm("""    private fun isGenerationCurrent(generation: Long): Boolean = generation == connectionGeneration""",
+"""    /**
+     * Continue AUTO after the four fast attempts, without a busy loop.
+     * One timer and one connect job; manual STOP/mode change invalidates both.
+     * The next wave reorders locally failed/cooling candidates and sees fresh feed.
+     */
+    private fun scheduleOneTapRetry(generation: Long) {
+        if (!isGenerationCurrent(generation) ||
+            !OneTapRetryPolicy.shouldContinue(
+                oneTapWanted, _connectionMode.value == ConnectionMode.AUTO,
+                automaticConnectSuppressed,
+                _isConnected.value || VpnController.state.value == VpnState.Connected,
+                vpnPermissionIntent() == null
+            )) return
+        val waitMs = OneTapRetryPolicy.retryDelayMs(++oneTapRetryRounds)
+        oneTapRetryJob?.cancel()
+        _vpnError.value = "Проверенные серверы пока не подключились. Продолжаю поиск через " +
+            (waitMs / 1000L) + " с; остановить можно кнопкой «Отключить»."
+        oneTapRetryJob = viewModelScope.launch {
+            delay(waitMs)
+            if (!isGenerationCurrent(generation) ||
+                !OneTapRetryPolicy.shouldContinue(
+                    oneTapWanted, _connectionMode.value == ConnectionMode.AUTO,
+                    automaticConnectSuppressed,
+                    _isConnected.value || VpnController.state.value == VpnState.Connected,
+                    vpnPermissionIntent() == null
+                )) return@launch
+            checkServers() // scanner applies its own bounded refresh and sleep policy
+            val next = chooseBestAutoServer() ?: chooseQuickAutoCandidate()
+            if (next == null) {
+                scheduleOneTapRetry(generation)
+            } else {
+                _selectedServer.value = next.copy(isFavorite = next.id in favoriteIds)
+                selectedServerExplicit = false
+                connect()
+            }
+        }
+    }
+
+    private fun isGenerationCurrent(generation: Long): Boolean = generation == connectionGeneration""")
+
+patch_vm("""    fun disconnect() {
+        cancelAutoSelection()""",
+"""    fun disconnect() {
+        cancelAutoSelection()""")
+
+patch_vm("""        automaticConnectSuppressed = false
+        autoSelection.request()""",
+"""        automaticConnectSuppressed = false
+        oneTapWanted = true
+        oneTapRetryRounds = 0
+        oneTapRetryJob?.cancel()
+        oneTapRetryJob = null
+        autoSelection.request()""")
+
+patch_vm("""    fun cancelAutoSelection() {
+        autoSelection.cancel()""",
+"""    fun cancelAutoSelection() {
+        autoSelection.cancel()
+        oneTapWanted = false
+        oneTapRetryRounds = 0
+        oneTapRetryJob?.cancel()
+        oneTapRetryJob = null""")
+
+patch_vm("""                    reconnectJob = null
+                    checkServers()
+                }
+            }
+        }
+    }
+
+    fun toggleFavorite""",
+"""                    reconnectJob = null
+                    checkServers()
+                    scheduleOneTapRetry(generation)
+                }
+            }
+        }
+    }
+
+    fun toggleFavorite""")
+
+patch_vm("""    override fun onCleared() {
+        ++connectionGeneration""",
+"""    override fun onCleared() {
+        oneTapWanted = false
+        oneTapRetryJob?.cancel()
+        ++connectionGeneration""")
+
+vm_path.write_text(vm, encoding="utf-8")
+policy = root / "app/src/main/java/com/secureconnect/app/viewmodel/OneTapRetryPolicy.kt"
+policy.write_text("""package com.secureconnect.app.viewmodel
+
+/**
+ * Four fast Xray/TLS attempts in each wave, then battery-bounded retry.
+ * This is not a license to bypass certificate errors or the VPN kill switch.
+ */
+internal object OneTapRetryPolicy {
+    const val MAX_ATTEMPTS_PER_WAVE = 4
+    fun retryDelayMs(failedWaves: Int): Long = when (failedWaves) {
+        1 -> 20_000L
+        2 -> 40_000L
+        3 -> 90_000L
+        else -> 180_000L
+    }
+    fun shouldContinue(
+        requested: Boolean, autoMode: Boolean, suppressed: Boolean,
+        connected: Boolean, permissionGranted: Boolean
+    ): Boolean = requested && autoMode && !suppressed && !connected && permissionGranted
+}
+""", encoding="utf-8")
+print("SecureConnect one-tap bounded retry patch applied")

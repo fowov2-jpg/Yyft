@@ -8,6 +8,7 @@ on:
       - 'android/source.zip'
       - '.github/workflows/android-build.yml'
       - 'android/patches/**'
+      - 'android/ci-tests/**'
 
 permissions:
   contents: read
@@ -68,6 +69,13 @@ jobs:
       - name: Apply verified SecureConnect 2.4.8 online candidate patch
         run: python android/patches/apply_one_tap.py android/build-input/SecureConnect-2.4.7
 
+      - name: Install CI failure-injection regression tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp android/ci-tests/CiFailureRecoveryMatrixTest.kt \\
+             android/build-input/SecureConnect-2.4.7/app/src/test/java/com/secureconnect/app/vpn/CiFailureRecoveryMatrixTest.kt
+
       - name: Compile installable debug APK
         working-directory: android/build-input/SecureConnect-2.4.7
         run: ./gradlew --no-daemon --stacktrace :app:assembleDebug
@@ -94,6 +102,15 @@ jobs:
           fi
           "$signer" verify --verbose --print-certs "$apk"
           echo "::warning::This APK uses a debug signing certificate. CI audit does not certify Play Protect safety."
+
+      - name: Publish unit-test regression report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: secureconnect-android-junit-results
+          path: android/build-input/SecureConnect-2.4.7/app/build/test-results/testDebugUnitTest/**/*.xml
+          retention-days: 7
+          if-no-files-found: warn
 
       - name: Show APK fingerprint
         if: always()

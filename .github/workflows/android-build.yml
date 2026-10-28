@@ -73,7 +73,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cp android/ci-tests/CiFailureRecoveryMatrixTest.kt \\
+          cp android/ci-tests/CiFailureRecoveryMatrixTest.kt \
              android/build-input/SecureConnect-2.4.7/app/src/test/java/com/secureconnect/app/vpn/CiFailureRecoveryMatrixTest.kt
 
       - name: Compile installable debug APK

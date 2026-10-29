@@ -9,6 +9,7 @@ on:
       - '.github/workflows/android-build.yml'
       - 'android/patches/**'
       - 'android/ci-tests/**'
+      - 'security_audit/**'
 
 permissions:
   contents: read

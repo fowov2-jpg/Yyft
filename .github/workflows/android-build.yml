@@ -105,6 +105,10 @@ jobs:
         working-directory: android/build-input/SecureConnect-2.4.7
         run: ./gradlew --no-daemon --stacktrace :app:testDebugUnitTest
 
+      - name: Run Android Lint (block APK publication on errors)
+        working-directory: android/build-input/SecureConnect-2.4.7
+        run: ./gradlew --no-daemon :app:lintDebug
+
       - name: Audit debug APK permissions, VPN service and APK signature
         shell: bash
         run: |
@@ -131,6 +135,17 @@ jobs:
           name: secureconnect-security-audit
           path: security_audit/audit-result.json
           if-no-files-found: warn
+          retention-days: 7
+
+      - name: Upload Android Lint reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: secureconnect-android-lint
+          path: |
+            android/build-input/SecureConnect-2.4.7/app/build/reports/lint-results-debug.html
+            android/build-input/SecureConnect-2.4.7/app/build/reports/lint-results-debug.xml
+          if-no-files-found: ignore
           retention-days: 7
 
       - name: Publish unit-test regression report

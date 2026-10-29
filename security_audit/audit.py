@@ -98,6 +98,9 @@ def run(root: Path, workflow: Path) -> dict:
             len(upload) == 2 and
             "if: success()" in upload[1].split("      - ", 1)[0] and
             "if-no-files-found: error" in upload[1])
+    require("android_lint_required_before_apk_publish",
+            ":app:lintDebug" in workflow_text and
+            workflow_text.index(":app:lintDebug") < workflow_text.index("      - name: Upload APK"))
     require("android_unit_tests_required",
             ":app:testDebugUnitTest" in workflow_text and
             "Audit debug APK permissions" in workflow_text)

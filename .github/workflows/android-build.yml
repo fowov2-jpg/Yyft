@@ -89,6 +89,9 @@ jobs:
           set -euo pipefail
           cp android/ci-tests/SessionTimerPolicyTest.kt android/build-input/SecureConnect-2.4.7/app/src/test/java/com/secureconnect/app/SessionTimerPolicyTest.kt
 
+      - name: Run offline source security audit (fail closed)
+        run: python security_audit/audit.py android/build-input/SecureConnect-2.4.7 .github/workflows/android-build.yml
+
       - name: Compile installable debug APK
         working-directory: android/build-input/SecureConnect-2.4.7
         run: ./gradlew --no-daemon --stacktrace :app:assembleDebug
@@ -115,6 +118,15 @@ jobs:
           fi
           "$signer" verify --verbose --print-certs "$apk"
           echo "::warning::This APK uses a debug signing certificate. CI audit does not certify Play Protect safety."
+
+      - name: Upload static audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: secureconnect-security-audit
+          path: security_audit/audit-result.json
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Publish unit-test regression report
         if: always()

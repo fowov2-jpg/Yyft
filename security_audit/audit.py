@@ -45,7 +45,7 @@ def run(root: Path, workflow: Path) -> dict:
     queried = {p.get(ANDROID + "name") for p in queries.findall("package")} if queries is not None else set()
     catalogue_text = ((app / "src/main/java/com/secureconnect/app/vpn/AppRoutingPolicy.kt").read_text(encoding="utf-8") +
         (app / "src/main/java/com/secureconnect/app/vpn/RussianAppsExpanded.kt").read_text(encoding="utf-8"))
-    expected = set(re.findall(r'RussianApp\\("([a-zA-Z][a-zA-Z0-9_.]+)"', catalogue_text))
+    expected = set(re.findall(r'RussianApp\("([a-zA-Z][a-zA-Z0-9_.]+)"', catalogue_text))
     intent_covered = queries is not None and any(
         child.get(ANDROID + "name") == "android.intent.action.MAIN"
         for q in queries.findall("intent") for child in q.findall("action"))

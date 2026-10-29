@@ -176,7 +176,7 @@ catalogue = (
     (main / "vpn/RussianAppsExpanded.kt").read_text(encoding="utf-8")
 )
 package_ids = sorted(set(re.findall(
-    r'RussianApp\\("([a-zA-Z][a-zA-Z0-9_.]+)"', catalogue
+    r'RussianApp\("([a-zA-Z][a-zA-Z0-9_.]+)"', catalogue
 )))
 if len(package_ids) != 125:
     raise RuntimeError("Russian package catalogue changed: update visibility rules explicitly")

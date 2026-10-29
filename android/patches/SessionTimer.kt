@@ -6,6 +6,9 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.SystemClock
+import com.secureconnect.app.vpn.VpnController
+import com.secureconnect.app.vpn.VpnState
+import com.secureconnect.app.vpn.XrayVpnService
 
 /** Persisted one-tap VPN usage limit. Never extend during auto-retry/reconnect. */
 internal object SessionTimer {
@@ -22,12 +25,19 @@ internal object SessionTimer {
     /** Selecting a duration during an active session starts a new countdown now. */
     fun choose(context: Context, hours: Int) {
         require(SessionTimerPolicy.valid(hours))
-        val active = hasActiveSession(context)
-        prefs(context).edit().putInt(HOURS, hours).commit()
-        if (active) {
-            cancelActive(context)
-            if (hours != 0) startIfNeeded(context)
+        val alreadyTimed = hasActiveSession(context)
+        val state = VpnController.state.value
+        val vpnInProgress = XrayVpnService.hasLiveTunnel() ||
+            state == VpnState.Connecting || state == VpnState.Validating ||
+            state == VpnState.Connected || state == VpnState.Blocked
+        val shouldStart = SessionTimerPolicy.startOnChoice(
+            hours, alreadyTimed, vpnInProgress)
+        check(prefs(context).edit().putInt(HOURS, hours).commit()) {
+            "Failed to save selected VPN session duration"
         }
+        // Also handle switching from 'Unlimited' to 1..24h while VPN is already active.
+        if (alreadyTimed) cancelActive(context)
+        if (shouldStart) startIfNeeded(context)
     }
 
     fun hasActiveSession(context: Context): Boolean =

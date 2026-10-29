@@ -3,6 +3,10 @@ package com.secureconnect.app
 /** Pure policy testable with JUnit without an Android runtime. */
 internal object SessionTimerPolicy {
     val choicesHours = listOf(0, 1, 2, 3, 4, 6, 8, 12, 24)
+    /** Changing from unlimited must start a timer if a VPN is already active. */
+    fun startOnChoice(hours: Int, previouslyTimed: Boolean, vpnInProgress: Boolean): Boolean =
+        valid(hours) && hours > 0 && (previouslyTimed || vpnInProgress)
+
     fun valid(hours: Int): Boolean = hours in choicesHours
     fun durationMs(hours: Int): Long {
         require(valid(hours)) { "Invalid session duration" }

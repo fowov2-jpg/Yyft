@@ -12,6 +12,14 @@ class SessionTimerPolicyTest {
         assertEquals(86_400_000L, SessionTimerPolicy.durationMs(24))
         assertFalse(SessionTimerPolicy.valid(25))
     }
+    @Test fun changingUnlimitedToTwoHoursDuringVpnStartsCountdown() {
+        assertTrue(SessionTimerPolicy.startOnChoice(2, false, true))
+        assertTrue(SessionTimerPolicy.startOnChoice(24, true, false))
+        assertFalse(SessionTimerPolicy.startOnChoice(0, true, true))
+        assertFalse(SessionTimerPolicy.startOnChoice(2, false, false))
+        assertFalse(SessionTimerPolicy.startOnChoice(25, true, true))
+    }
+
     @Test fun deadlineCheckUsesEitherClockAndIgnoresInactiveTimer() {
         assertFalse(SessionTimerPolicy.expired(8, 0, 10, 0))
         assertFalse(SessionTimerPolicy.expired(499, 500, 899, 900))

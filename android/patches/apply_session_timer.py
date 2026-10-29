@@ -5,6 +5,7 @@ This patch must run AFTER apply_one_tap.py and fails on changed source anchors.
 from pathlib import Path
 import shutil
 import sys
+import re
 
 root = Path(sys.argv[1]).resolve()
 here = Path(__file__).resolve().parent
@@ -166,5 +167,40 @@ replace(settings,
                 }
             }
             item { NativeSectionTitle("Безопасность и маршруты") }''')
+
+# Package visibility privacy fix: enumerate only user-launchable apps and our
+# curated, exact Russian routing presets. Do NOT grant QUERY_ALL_PACKAGES.
+# Manual routing for unrelated non-launcher apps may no longer be discoverable.
+catalogue = (
+    (main / "vpn/AppRoutingPolicy.kt").read_text(encoding="utf-8") + "\n" +
+    (main / "vpn/RussianAppsExpanded.kt").read_text(encoding="utf-8")
+)
+package_ids = sorted(set(re.findall(
+    r'RussianApp\\("([a-zA-Z][a-zA-Z0-9_.]+)"', catalogue
+)))
+if len(package_ids) != 125:
+    raise RuntimeError("Russian package catalogue changed: update visibility rules explicitly")
+manifest_file = root / "app/src/main/AndroidManifest.xml"
+manifest_text = manifest_file.read_text(encoding="utf-8")
+wide = '<uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />'
+if manifest_text.count(wide) != 1:
+    raise RuntimeError("Package visibility permission anchor missing/duplicated")
+queries = '\n    <queries>\n' + \
+    '        <intent>\n' + \
+    '            <action android:name="android.intent.action.MAIN" />\n' + \
+    '            <category android:name="android.intent.category.LAUNCHER" />\n' + \
+    '        </intent>\n' + \
+    ''.join('        <package android:name="' + name + '" />\n' for name in package_ids) + \
+    '    </queries>'
+manifest_file.write_text(manifest_text.replace(wide, queries, 1), encoding="utf-8")
+
+# Keep developer documentation honest after removing broad package visibility.
+routing_store = main / "vpn/AppRoutingStore.kt"
+store_text = routing_store.read_text(encoding="utf-8")
+store_text = store_text.replace(
+    "List all installed packages including those without launcher icons.",
+    "List visible launcher apps and 125 named Russian presets; unknown "
+    "non-launcher packages require explicit manifest visibility.")
+routing_store.write_text(store_text, encoding="utf-8")
 
 print("SecureConnect session timer installed and expiry checks enabled")

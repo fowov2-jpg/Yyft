@@ -41,12 +41,22 @@ def run(root: Path, workflow: Path) -> dict:
     require("timer_receiver_private",
             receiver is not None and receiver.get(ANDROID + "exported") == "false")
     used_permissions = {p.get(ANDROID + "name") for p in manifest.findall("uses-permission")}
+    queries = manifest.find("queries")
+    queried = {p.get(ANDROID + "name") for p in queries.findall("package")} if queries is not None else set()
+    catalogue_text = ((app / "src/main/java/com/secureconnect/app/vpn/AppRoutingPolicy.kt").read_text(encoding="utf-8") +
+        (app / "src/main/java/com/secureconnect/app/vpn/RussianAppsExpanded.kt").read_text(encoding="utf-8"))
+    expected = set(re.findall(r'RussianApp\\("([a-zA-Z][a-zA-Z0-9_.]+)"', catalogue_text))
+    intent_covered = queries is not None and any(
+        child.get(ANDROID + "name") == "android.intent.action.MAIN"
+        for q in queries.findall("intent") for child in q.findall("action"))
+    require("package_visibility_limited_to_launcher_and_curated_presets",
+            "android.permission.QUERY_ALL_PACKAGES" not in used_permissions and
+            len(expected) == 125 and queried == expected and intent_covered)
     banned = {"READ_SMS", "READ_CONTACTS", "RECORD_AUDIO", "CAMERA",
               "REQUEST_INSTALL_PACKAGES", "SYSTEM_ALERT_WINDOW"}
     require("no_unapproved_sensitive_permissions",
             not any("android.permission." + suffix in used_permissions for suffix in banned))
-    if "android.permission.QUERY_ALL_PACKAGES" in used_permissions:
-        warnings.append("QUERY_ALL_PACKAGES needs a documented distribution/privacy review")
+    warnings.append("Package visibility deliberately limited: arbitrary non-launcher apps may not appear in routing UI")
 
     main = app / "src/main/java/com/secureconnect/app"
     timer = (main / "SessionTimer.kt").read_text(encoding="utf-8")

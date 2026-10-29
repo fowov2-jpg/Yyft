@@ -103,7 +103,9 @@ object PublicCandidateFeed {
                 val nodes = LinkedHashMap<String, com.secureconnect.app.data.model.Server>()
                 for (i in 0 until candidates.length()) {
                     val c = candidates.optJSONObject(i) ?: continue
-                    val source = sources[c.optString("source_id")] ?: continue
+                    val sourceId = c.optString("source_id")
+                    val sourceName = PublicCandidateSourcePolicy.nameFor(
+                        sourceId, sources.mapValues { it.value.name }) ?: continue
                     val uri = c.optString("uri")
                     val checked = utc(c.optString("checked_at")) ?: continue
                     val fp = c.optString("fingerprint")
@@ -113,7 +115,7 @@ object PublicCandidateFeed {
                         checked > now+SKEW || now-checked !in 0L until TWO_HOURS ||
                         c.opt("youtube_page_ok") !is Boolean ||
                         c.optInt("https_latency_ms", -1) !in 1..30_000) continue
-                    val server = ConfigParser.parse(uri, source.name) ?: continue
+                    val server = ConfigParser.parse(uri, sourceName) ?: continue
                     if (!remoteHostAllowed(server.host) ||
                         XrayConfigBuilder.build(server, null) == null) continue
                     nodes.putIfAbsent(server.id, server.copy(ping = 0))

@@ -92,6 +92,10 @@ jobs:
       - name: Run offline source security audit (fail closed)
         run: python security_audit/audit.py android/build-input/SecureConnect-2.4.7 .github/workflows/android-build.yml
 
+      - name: Install cloud public-source allowlist tests
+        run: |
+          cp android/ci-tests/PublicCandidateSourcePolicyTest.kt android/build-input/SecureConnect-2.4.7/app/src/test/java/com/secureconnect/app/vpn/PublicCandidateSourcePolicyTest.kt
+
       - name: Compile installable debug APK
         working-directory: android/build-input/SecureConnect-2.4.7
         run: ./gradlew --no-daemon --stacktrace :app:assembleDebug

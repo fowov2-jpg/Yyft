@@ -55,6 +55,8 @@ replace(anchor, """        if (publicCandidatesJob?.isActive != true) {
     fun request(""")
 scanner.write_text(text, encoding="utf-8")
 shutil.copyfile(source, target)
+shutil.copyfile(Path(__file__).with_name("PublicCandidateSourcePolicy.kt"),
+                root / "app/src/main/java/com/secureconnect/app/vpn/PublicCandidateSourcePolicy.kt")
 # Deterministic Android JVM regression tests: no emulator and no third-party VPN traffic.
 regression = root / "app/src/test/java/com/secureconnect/app/viewmodel/RecoveryFlowRegressionTest.kt"
 regression.parent.mkdir(parents=True, exist_ok=True)

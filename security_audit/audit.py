@@ -54,6 +54,12 @@ def run(root: Path, workflow: Path) -> dict:
     run_ctrl = (main / "AppRunController.kt").read_text(encoding="utf-8")
     vpn_source = (main / "vpn/XrayVpnService.kt").read_text(encoding="utf-8")
     scanner_source = (main / "ServerScanService.kt").read_text(encoding="utf-8")
+    cloud = (main / "vpn/PublicCandidateFeed.kt").read_text(encoding="utf-8")
+    allowlist = (main / "vpn/PublicCandidateSourcePolicy.kt").read_text(encoding="utf-8")
+    require("cloud_feed_enforces_explicit_source_allowlist",
+            "PublicCandidateSourcePolicy.nameFor(" in cloud and
+            '"telega_ru" -> "TelegaVPN/free-vpn-keys"' in allowlist and
+            "else -> null" in allowlist)
     require("timer_has_active_vpn_choice_fix",
             "SessionTimerPolicy.startOnChoice(" in timer and
             "XrayVpnService.hasLiveTunnel()" in timer and

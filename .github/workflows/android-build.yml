@@ -81,6 +81,14 @@ jobs:
           set -euo pipefail
           cp android/ci-tests/OneTapRetryPolicyTest.kt android/build-input/SecureConnect-2.4.7/app/src/test/java/com/secureconnect/app/viewmodel/OneTapRetryPolicyTest.kt
 
+      - name: Apply session timer and expiry guards
+        run: python android/patches/apply_session_timer.py android/build-input/SecureConnect-2.4.7
+
+      - name: Install session timer JUnit tests
+        run: |
+          set -euo pipefail
+          cp android/ci-tests/SessionTimerPolicyTest.kt android/build-input/SecureConnect-2.4.7/app/src/test/java/com/secureconnect/app/SessionTimerPolicyTest.kt
+
       - name: Compile installable debug APK
         working-directory: android/build-input/SecureConnect-2.4.7
         run: ./gradlew --no-daemon --stacktrace :app:assembleDebug

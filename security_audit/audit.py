@@ -78,6 +78,12 @@ def run(root: Path, workflow: Path) -> dict:
     require("keystore_aes_gcm",
             all(s in (main / "data/local/SensitivePrefs.kt").read_text(encoding="utf-8")
                 for s in ("AndroidKeyStore", "AES/GCM/NoPadding", "KeyProperties.PURPOSE_DECRYPT")))
+    # A release signing key must never be bundled in a public Android source archive.
+    secret_suffixes = {".jks", ".keystore", ".p12", ".pfx"}
+    private_keys = [str(p.relative_to(root)) for p in root.rglob("*")
+                    if p.is_file() and (p.suffix.lower() in secret_suffixes or
+                    p.name == "release.keystore")]
+    require("no_private_signing_keys_in_public_source", not private_keys)
     gradle = (app / "build.gradle.kts").read_text(encoding="utf-8")
     require("native_xray_sha256_pinned",
             bool(re.search(r'val xraySha256 = "[0-9a-f]{64}"', gradle)) and

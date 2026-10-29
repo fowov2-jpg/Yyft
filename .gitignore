@@ -1,0 +1,19 @@
+# Do not commit signing keys, passwords or private credentials.
+**/*.keystore
+**/*.jks
+**/*.p12
+**/*.pfx
+**/*.p8
+**/*.pem
+**/.env
+**/.env.*
+!**/.env.example
+**/local.properties
+
+# Build output / temporary artifacts.
+**/.gradle/
+**/build/
+**/captures/
+**/*.apk
+**/*.aab
+*.log

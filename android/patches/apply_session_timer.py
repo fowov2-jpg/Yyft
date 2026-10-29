@@ -64,10 +64,10 @@ replace(vm,
             !AppRunController.mayRun(getApplication())) return
         setConnectionMode(ConnectionMode.AUTO)""")
 replace(vm,
-    "        automaticConnectSuppressed = false\n        autoSelection.request()",
-    """        automaticConnectSuppressed = false
-        SessionTimer.startIfNeeded(getApplication())
-        autoSelection.request()""")
+    "        autoSelection.request()\n        refreshWorkingPool()",
+    """        SessionTimer.startIfNeeded(getApplication())
+        autoSelection.request()
+        refreshWorkingPool()""")
 replace(vm,
     "        // VPN is latency-sensitive. Stop subscription refresh/probing so one of",
     """        SessionTimer.startIfNeeded(getApplication())

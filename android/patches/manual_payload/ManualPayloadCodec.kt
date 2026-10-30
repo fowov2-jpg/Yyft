@@ -24,6 +24,13 @@ internal object ManualPayloadCodec {
         "Host: vk.com:443[crlf]" +
         "Connection: keep-alive[crlf][crlf]"
 
+    /** Confirms only ordinary web-site reachability, never HTTP CONNECT/VPN. */
+    const val WEBSITE_TEMPLATE =
+        "GET / HTTP/1.1[crlf]" +
+        "Host: vk.com[crlf]" +
+        "Connection: close[crlf]" +
+        "User-Agent: Dalvik/2.1.0 (Linux; Android 16)[crlf][crlf]"
+
     data class Encoding(val bytes: ByteArray, val preview: String, val error: String?) {
         val valid: Boolean get() = error == null
     }
@@ -91,6 +98,8 @@ internal object ManualPayloadCodec {
         line == null -> "HTTP-ответ не получен. VPN не подтверждён."
         Regex("^HTTP/1\\.[01] 2\\d\\d( |$)").containsMatchIn(line) ->
             "HTTP 2xx: шлюз ответил. VPN и обход ограничений НЕ подтверждены."
+        line.startsWith("HTTP/1.1 400") || line.startsWith("HTTP/1.0 400") ->
+            "HTTP 400: сервер принял TLS/HTTP-соединение, но отклонил запрос. Это не HTTP CONNECT-шлюз и не подтверждение VPN."
         line.startsWith("HTTP/1.") ->
             "Ответ шлюза: " + line.take(110) + ". VPN не подтверждён."
         else -> "Нестандартный ответ шлюза. VPN не подтверждён."

@@ -41,6 +41,16 @@ SOURCES = {
     "au1rxx": ["https://raw.githubusercontent.com/Au1rxx/free-vpn-subscriptions/main/output/protocol/vless/v2ray-base64-0001.txt"],
 
 }
+# The legacy Android PublicRankingFeed rejects an entire feed if ANY source_id
+# is absent from ConfigSources.all (notably cloud-only telega_ru). Keep the
+# metadata ranking compatible with already-installed APKs. This restriction
+# does not affect candidates.json, where the extra public source is explicitly
+# allowlisted by PublicCandidateSourcePolicy.
+ANDROID_RANKING_SOURCE_IDS = frozenset({
+    "avia", "nikita", "3inker", "radikal", "morpheus", "hamed",
+    "barry", "solispirit", "ebrasha", "mohammad", "au1rxx",
+})
+assert ANDROID_RANKING_SOURCE_IDS <= SOURCES.keys()
 MAX_PER_RUN = 24
 MAX_RESULTS = 180
 MAX_PUBLIC_CANDIDATES = 24
@@ -472,7 +482,12 @@ def pack_feed(checked, previous, now):
             good[fp] = {**r, "checked_at": iso(now)}
         else:
             good.pop(fp, None)  # known failure invalidates prior success
-    results = sorted(good.values(), key=lambda r: (not r["youtube_page_ok"], r["https_latency_ms"], r["source_id"]))[:MAX_RESULTS]
+    # Legacy Android parser is fail-closed for unknown IDs: one cloud-only
+    # telega_ru entry previously invalidated ALL 85 otherwise valid results.
+    # Preserve every verified item's original checked_at; never mint liveness.
+    compatible = (r for r in good.values()
+                  if r["source_id"] in ANDROID_RANKING_SOURCE_IDS)
+    results = sorted(compatible, key=lambda r: (not r["youtube_page_ok"], r["https_latency_ms"], r["source_id"]))[:MAX_RESULTS]
     obj = {"schema": 1, "generated_at": iso(now), "valid_until": iso(now+PUBLICATION_TTL), "checker": "xray-github-actions", "results": results}
     output = json.dumps(obj, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     if len(output) > MAX_FEED_BYTES:

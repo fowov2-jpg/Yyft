@@ -85,6 +85,34 @@ class ContractTest(unittest.TestCase):
         result = json.loads(checker.pack_public_candidates(checked, sampled, NOW))
         self.assertEqual([c["source_id"] for c in result["candidates"]], ["au1rxx"])
 
+    def test_legacy_android_ranking_never_includes_cloud_only_telega(self):
+        base = {
+            "fingerprint": "a"*64, "https_ok": True,
+            "youtube_page_ok": True, "https_latency_ms": 120,
+            "checked_at": checker.iso(NOW - timedelta(minutes=20))
+        }
+        known = {**base, "source_id": "hamed"}
+        cloud_only = {**base, "fingerprint": "b"*64, "source_id": "telega_ru"}
+        prev = {"schema": 1, "results": [known, cloud_only]}
+        page = json.loads(checker.pack_feed([], prev, NOW))
+        self.assertEqual([r["source_id"] for r in page["results"]], ["hamed"])
+        self.assertEqual(page["results"][0]["checked_at"], known["checked_at"])
+        page_new = json.loads(checker.pack_feed([cloud_only, known], {}, NOW))
+        self.assertEqual([r["source_id"] for r in page_new["results"]], ["hamed"])
+        self.assertNotIn("telega_ru", checker.ANDROID_RANKING_SOURCE_IDS)
+        self.assertIn("telega_ru", checker.SOURCES)
+        # The full URI-carrying Android candidate importer has its own
+        # explicit permission for the cloud-only source: don't drop it there.
+        uri = LINKS[0].split("#")[0]
+        sample = [{"fingerprint": checker.fingerprint(uri),
+                   "source_id": "telega_ru", "raw": uri}]
+        verified = [{"fingerprint": checker.fingerprint(uri),
+                     "source_id": "telega_ru", "https_ok": True,
+                     "youtube_page_ok": True, "https_latency_ms": 99}]
+        candidates = json.loads(checker.pack_public_candidates(
+            verified, sample, NOW))["candidates"]
+        self.assertEqual([x["source_id"] for x in candidates], ["telega_ru"])
+
     def test_additional_sources_are_fixed_public_https_only(self):
         for source in ("telega_ru", "au1rxx"):
             self.assertIn(source, checker.SOURCES)

@@ -82,6 +82,14 @@ def run(root: Path, workflow: Path) -> dict:
             "AppRunController.closed(context)" in timer and
             "ServerScanner.stopAll()" in run_ctrl and
             "stopLiveForTaskRemoval()" in run_ctrl)
+    home = (main / "ui/screens/home/HomeScreen.kt").read_text(encoding="utf-8")
+    countdown = (main / "ui/screens/home/SessionCountdown.kt").read_text(encoding="utf-8")
+    require("home_countdown_uses_persisted_deadline_foreground_only",
+            "SessionCountdown()" in home and
+            "SessionTimer.remainingMs(context)" in countdown and
+            "Lifecycle.State.RESUMED" in countdown and
+            "delay(1_000L)" in countdown and
+            "SessionTimer.startIfNeeded" not in countdown)
     require("timer_expiry_checked_in_services",
             "SessionTimer.expireIfDue(this)" in vpn_source and
             "SessionTimer.expireIfDue(this)" in scanner_source)

@@ -203,4 +203,17 @@ store_text = store_text.replace(
     "non-launcher packages require explicit manifest visibility.")
 routing_store.write_text(store_text, encoding="utf-8")
 
+# Place a live session countdown on the main (Home) VPN screen.
+# View-only: reads the persisted deadline, NEVER restarts the timer.
+home_screen = main / "ui/screens/home/HomeScreen.kt"
+replace(home_screen,
+    "            Spacer(Modifier.height(23.dp))\n\n            val panelShape = RoundedCornerShape(22.dp)",
+    """            Spacer(Modifier.height(12.dp))
+            SessionCountdown()
+            Spacer(Modifier.height(23.dp))
+
+            val panelShape = RoundedCornerShape(22.dp)""")
+shutil.copyfile(here / "SessionCountdown.kt",
+                main / "ui/screens/home/SessionCountdown.kt")
+
 print("SecureConnect session timer installed and expiry checks enabled")

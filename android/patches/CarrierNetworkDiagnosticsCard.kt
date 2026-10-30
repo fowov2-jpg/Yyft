@@ -205,6 +205,7 @@ internal fun CarrierNetworkDiagnosticsCard() {
                     "Network.openConnection используется только дополнительно. " +
                     "Покажем DNS, TCP, TLS и тайм-ауты. Сайты увидят мобильный " +
                     "IP-адрес. Ничего не отправляется в наш GitHub. " +
+                    "Оператор SIM не определяется автоматически. " +
                     "Доступность сайтов не доказывает ускорение VPN.",
                 color = ScTextSecondary, style = MaterialTheme.typography.bodySmall)
             Button(enabled = !running, onClick = {

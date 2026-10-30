@@ -101,13 +101,19 @@ def run(root: Path, workflow: Path) -> dict:
             "CarrierProbePolicy.vpnActiveNotice()" in carrier and
             "не подтверждают блокировку МегаФоном" in carrier_policy and
             "Оператор SIM не определяется автоматически" in carrier and
-            "withTimeoutOrNull(35_000L)" in carrier and
+            "withTimeoutOrNull(45_000L)" in carrier and
             "network.openConnection(URL(url))" in carrier and
             "URL(url).openConnection()" in carrier and
             "NET_CAPABILITY_VALIDATED" in carrier and
             "manager.activeNetwork" in carrier and
             "transport != \"мобильная\"" in carrier and
             "CarrierProbePolicy.routeComparison" in carrier and
+            "val checked = probe(null, endpoint.uri)" in carrier and
+            "val pinnedControl = probe(" in carrier and
+            "cellular, \"https://www.gstatic.com/generate_204\"" in carrier and
+            "manager.allNetworks.firstOrNull" not in carrier and
+            "CarrierProbePolicy.routeChangedNotice()" in carrier and
+            "manager.activeNetwork != cellular" in carrier and
             "UnknownHostException" in carrier and
             "ConnectException" in carrier and
             "Ничего не отправляется " in carrier and

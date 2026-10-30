@@ -53,8 +53,10 @@ internal object CarrierNetworkProbe {
         Target("GitHub-конфигурации", "https://fowov2-jpg.github.io/Yyft/candidates.json")
     )
     private fun probe(network: Network?, url: String): Probe {
-        // A null Network intentionally measures the Android default route.
-        // Both paths are read-only HTTPS, not proxy/TUN bypass configuration.
+        // The MAIN check must use network == null: Android's ordinary
+        // app/default route, just like a normal HttpsURLConnection call.
+        // Network.openConnection is a SECONDARY diagnostic, not the truth
+        // source for mobile Internet reachability.
         var connection: HttpsURLConnection? = null
         return try {
             connection = if (network == null) {
@@ -68,7 +70,9 @@ internal object CarrierNetworkProbe {
             connection.setRequestProperty("Accept", "text/html,application/json")
             connection.setRequestProperty("Accept-Encoding", "identity")
             val status = connection.responseCode
-            Probe("HTTP " + status, status in 200..399)
+            // HTTP 403/404/429/5xx still proves TLS reached the remote site.
+            // Redirects are not followed; any real HTTP status is a response.
+            Probe("HTTP " + status, status in 200..599)
         } catch (_: UnknownHostException) {
             Probe("DNS: имя не разрешилось", false)
         } catch (_: java.net.SocketTimeoutException) {
@@ -108,8 +112,10 @@ internal object CarrierNetworkProbe {
                 ?: return@withContext "Служба сети Android недоступна."
             // Android may expose a cellular Network even while the default
             // traffic is on Wi-Fi or an always-on VPN. Distinguish those paths.
+            val defaultNetwork = try { manager.activeNetwork }
+                                 catch (_: SecurityException) { null }
             val defaultCaps = try {
-                manager.activeNetwork?.let { manager.getNetworkCapabilities(it) }
+                defaultNetwork?.let { manager.getNetworkCapabilities(it) }
             } catch (_: SecurityException) { null }
             val transport = when {
                 defaultCaps == null -> "не определена"
@@ -121,50 +127,59 @@ internal object CarrierNetworkProbe {
             if (transport != "мобильная") {
                 return@withContext CarrierProbePolicy.unusableDefault(transport)
             }
-            val cellular = try {
-                manager.allNetworks.firstOrNull { n ->
-                    val caps = manager.getNetworkCapabilities(n)
-                    caps?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) == true &&
-                        !caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
-                }
-            } catch (_: SecurityException) { null }
-            if (cellular == null) {
-                return@withContext CarrierProbePolicy.conclusion(
+            val cellular = defaultNetwork
+                ?: return@withContext CarrierProbePolicy.conclusion(
                     cellular = false, vk = false, ordinaryHttps = false, vpnConnected = false)
-            }
-            val caps = try { manager.getNetworkCapabilities(cellular) }
-                       catch (_: SecurityException) { null }
+            // IMPORTANT: do not pick "firstOrNull" from allNetworks. On a
+            // dual-SIM Xiaomi that may be a non-default, unusable cellular path.
             val lines = mutableListOf(
-                "Прямые HTTPS-запросы через мобильную сеть:",
+                "Основной тест: обычный системный маршрут Android (мобильная сеть):",
                 CarrierProbePolicy.mobileNetworkSummary(
-                    caps?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true,
-                    caps?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true)
+                    defaultCaps?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true,
+                    defaultCaps?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true)
             )
             val found = mutableMapOf<String, Boolean>()
             for ((index, endpoint) in endpoints.withIndex()) {
+                // Auto-recovery may reconnect the VPN during this test.
+                // If the Android default route changed, do not attribute any
+                // resulting HTTPS traffic or errors to the cellular provider.
+                if (VpnController.state.value is VpnState.Connected ||
+                    manager.activeNetwork != cellular) {
+                    return@withContext lines.joinToString("\n") + "\n" +
+                        CarrierProbePolicy.routeChangedNotice()
+                }
                 show(CarrierProbePolicy.progress(index + 1, endpoints.size,
                     endpoint.label, lines))
-                val checked = probe(cellular, endpoint.uri)
+                val checked = probe(null, endpoint.uri)
                 found[endpoint.label] = checked.reachable
                 lines.add(endpoint.label + ": " + checked.text)
                 show(CarrierProbePolicy.progress(
                     index + 1, endpoints.size, "следующий этап", lines))
             }
-            show("Дополнительная проверка: системный маршрут Android…\n" +
+            if (VpnController.state.value is VpnState.Connected ||
+                manager.activeNetwork != cellular) {
+                return@withContext lines.joinToString("\n") + "\n" +
+                    CarrierProbePolicy.routeChangedNotice()
+            }
+            show("Дополнительная проверка: явная привязка к мобильной сети…\n" +
                 lines.joinToString("\n"))
-            // One extra small HTTPS GET on the default Android route.
-            // Only run when the default is cellular AND no VPN is active.
-            val defaultControl = probe(
-                null, "https://www.gstatic.com/generate_204")
-            lines.add("Системный маршрут Android: " + defaultControl.text)
+            // OPTIONAL control: only for comparison with the already tested
+            // normal Android route; never use this as the primary verdict.
+            val pinnedControl = probe(
+                cellular, "https://www.gstatic.com/generate_204")
+            lines.add("Network.openConnection (дополнительный тест): " + pinnedControl.text)
             lines.add(CarrierProbePolicy.routeComparison(
-                found["Обычный HTTPS"] == true, defaultControl.reachable))
+                found["Обычный HTTPS"] == true, pinnedControl.reachable))
             val connected = VpnController.state.value is VpnState.Connected
+            if (connected || manager.activeNetwork != cellular) {
+                lines.add(CarrierProbePolicy.routeChangedNotice())
+                return@withContext lines.joinToString("\n")
+            }
             lines.add(CarrierProbePolicy.conclusion(
                 cellular = true,
                 vk = found["VK"] == true,
                 ordinaryHttps = found["Обычный HTTPS"] == true,
-                vpnConnected = connected
+                vpnConnected = false
             ))
             lines.joinToString("\n")
         }
@@ -185,11 +200,11 @@ internal fun CarrierNetworkDiagnosticsCard() {
                 color = ScTextPrimary, style = MaterialTheme.typography.titleMedium)
             Text(
                 "При подключённом VPN тест не запускается. Без VPN и при мобильной " +
-                    "сети по умолчанию проверяются четыре HTTPS-сайта и ещё один " +
-                    "небольшой контрольный запрос через системный маршрут Android. " +
-                    "Покажем DNS, TCP, TLS или тайм-аут вместо общей ошибки. " +
-                    "Сайты увидят мобильный IP-адрес. Ничего не отправляется " +
-                    "в наш GitHub. Оператор SIM не определяется автоматически. " +
+                    "сети по умолчанию проверяем VK, Яндекс, обычный HTTPS и GitHub " +
+                    "через стандартный сетевой маршрут Android. Принудительный " +
+                    "Network.openConnection используется только дополнительно. " +
+                    "Покажем DNS, TCP, TLS и тайм-ауты. Сайты увидят мобильный " +
+                    "IP-адрес. Ничего не отправляется в наш GitHub. " +
                     "Доступность сайтов не доказывает ускорение VPN.",
                 color = ScTextSecondary, style = MaterialTheme.typography.bodySmall)
             Button(enabled = !running, onClick = {
@@ -197,7 +212,7 @@ internal fun CarrierNetworkDiagnosticsCard() {
                 result = "Кнопка нажата. Начинаю проверку мобильной сети…"
                 scope.launch {
                     try {
-                        val answer = withTimeoutOrNull(35_000L) {
+                        val answer = withTimeoutOrNull(45_000L) {
                             CarrierNetworkProbe.run(context.applicationContext) {
                                 progress -> result = progress
                             }

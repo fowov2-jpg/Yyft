@@ -27,20 +27,30 @@ internal object CarrierProbePolicy {
             transport + ". Для сравнения нужна именно мобильная сеть " +
             "по умолчанию без активного VPN. Защита и настройки не изменены."
 
-    fun routeComparison(cellularControl: Boolean, defaultControl: Boolean): String =
+    /** First argument ALWAYS represents the primary, ordinary Android route. */
+    fun routeComparison(defaultControl: Boolean, pinnedControl: Boolean): String =
         when {
-            defaultControl && !cellularControl ->
-                "Контрольный HTTPS по системному маршруту отвечает, а при явной " +
-                    "привязке к мобильной сети нет: возможна ошибка выбора сети " +
-                    "или ограничения Android. Это не доказательство блока МегаФоном."
-            !defaultControl && !cellularControl ->
-                "Контрольный HTTPS не ответил ни по системному, ни по выбранному " +
-                    "мобильному маршруту. Причина может быть в Android, DNS, сети " +
-                    "или операторе; блокировка МегаФоном не подтверждена."
+            defaultControl && !pinnedControl ->
+                "Основной системный HTTPS отвечает; отдельный Network.openConnection " +
+                    "не ответил. Значит прежний метод диагностики давал ложные " +
+                    "отрицательные результаты. Это не блокировка сайтов оператором."
+            !defaultControl && pinnedControl ->
+                "Основной системный HTTPS не ответил, но дополнительная привязка " +
+                    "к мобильной сети отвечает. Есть различие маршрутизации Android; " +
+                    "блокировка оператором не доказана."
+            !defaultControl && !pinnedControl ->
+                "Оба метода не получили HTTPS-ответ: причина может быть в Android, " +
+                    "DNS, политике VPN или мобильной сети. Блокировка МегаФоном " +
+                    "не подтверждена."
             else ->
-                "Сравнение маршрутов выполнено. Доступность HTTPS не доказывает, " +
-                    "что VPN классифицируется оператором как VK."
+                "Оба метода получили HTTPS-ответ. Это не доказывает, что " +
+                    "VPN-трафик классифицируется оператором как VK."
         }
+
+    fun routeChangedNotice(): String =
+        "Проверка остановлена: во время теста изменился основной маршрут " +
+            "Android или переподключился VPN. Результаты недостоверны; " +
+            "выводов о блокировках оператора делать нельзя."
 
     fun progress(index: Int, total: Int, label: String, completed: List<String>): String =
         "Проверка " + index + "/" + total + ": " + label + "\n" +
@@ -59,7 +69,9 @@ internal object CarrierProbePolicy {
             !vk && ordinaryHttps ->
                 "Контрольный HTTPS отвечает, а VK не ответил. Причина не определена."
             else ->
-                "Оба сайта не ответили. Причина не определена."
+                "Ни для VK, ни для контрольного HTTPS не получен ответ. " +
+                    "Причина не определена: ошибка DNS, Android, сети или сайта. " +
+                    "Это не доказательство блокировки оператором."
         }
         val vpn = if (vpnConnected)
             "Xray сообщает о подключении VPN."

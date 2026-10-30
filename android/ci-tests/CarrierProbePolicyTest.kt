@@ -4,6 +4,19 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CarrierProbePolicyTest {
+    @Test fun routeReconnectedWhileProbingNeverAttributesFailureToOperator() {
+        val text = CarrierProbePolicy.routeChangedNotice()
+        assertTrue(text.contains("Проверка остановлена"))
+        assertTrue(text.contains("VPN"))
+        assertTrue(text.contains("выводов о блокировках оператора делать нельзя"))
+    }
+
+    @Test fun noHttpsResponseMeansInconclusiveNotOperatorBlock() {
+        val message = CarrierProbePolicy.conclusion(true, false, false, false)
+        assertTrue(message.contains("Ни для VK"))
+        assertTrue(message.contains("Это не доказательство блокировки"))
+    }
+
     @Test fun mobileValidationStatusDoesNotMeanMegafonWhitelist() {
         val s = CarrierProbePolicy.mobileNetworkSummary(false, true)
         assertTrue(s.contains("INTERNET=да"))
@@ -20,11 +33,13 @@ class CarrierProbePolicyTest {
 
     @Test fun defaultRouteControlPreventsFalseCarrierAttribution() {
         val explicitBroken = CarrierProbePolicy.routeComparison(false, true)
-        assertTrue(explicitBroken.contains("системному маршруту отвечает"))
-        assertTrue(explicitBroken.contains("не доказательство"))
+        assertTrue(explicitBroken.contains("прежний метод диагностики"))
+        assertTrue(explicitBroken.contains("не блокировка"))
         val bothBroken = CarrierProbePolicy.routeComparison(false, false)
-        assertTrue(bothBroken.contains("Android, DNS, сети"))
+        assertTrue(bothBroken.contains("причина может быть"))
         assertTrue(bothBroken.contains("не подтверждена"))
+        assertTrue(CarrierProbePolicy.routeComparison(false, true)
+            .contains("различие маршрутизации Android"))
         assertTrue(CarrierProbePolicy.routeComparison(true, true)
             .contains("не доказывает"))
     }

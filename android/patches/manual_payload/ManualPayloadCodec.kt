@@ -14,7 +14,7 @@ internal object ManualPayloadCodec {
         "CONNECT Https://vk.com HTTP/1.1[crlf]" +
         "Host: Https://vk.com[crlf]" +
         "Connection: keep-alive[crlf]" +
-        "User-Agent: Dalvik/2.1.0 (Linux; U; Android 16)[crlf]" +
+        "User-Agent: Dalvik/2.1.0 (Linux; U; Android 16; 2607APCA5G Build/BP2A.250605.031.A3)[crlf]" +
         "Referer: Https://vk.com[crlf]" +
         "X-Online-Host: Https://vk.com[crlf]" +
         "X-Forwarded-For: Https://vk.com[crlf][crlf]"

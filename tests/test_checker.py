@@ -204,6 +204,75 @@ class ContractTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             checker.pack_xray_restarts([{**r[0], "uri": uri}], NOW)
 
+    def test_probe_batch_rechecks_existing_working_routes_without_exceeding_budget(self):
+        sources = ["avia", "radikal", "hamed", "3inker", "telega_ru", "au1rxx", "avia"]
+        previous = {"schema": 1, "checker": "xray-github-actions", "candidates": []}
+        for i, source in enumerate(sources):
+            uri = f"vless://{UUID}@public.example.org:443?security=reality&pbk=valid&sni=a.example.com&n={i}"
+            previous["candidates"].append({
+                "fingerprint": checker.fingerprint(uri), "source_id": source,
+                "uri": uri, "https_latency_ms": 120+i, "youtube_page_ok": True,
+                "checked_at": checker.iso(NOW-timedelta(minutes=65))
+            })
+        incoming = {"mohammad": [f"trojan://pass@public.example.org:443?security=tls&seed={i}"
+                                 for i in range(60)]}
+        selected = checker.select_probe_batch(incoming, 13, previous, NOW)
+        self.assertEqual(len(selected), checker.MAX_PER_RUN)
+        previous_fps = {c["fingerprint"] for c in previous["candidates"]}
+        rechecked = [c for c in selected if c["fingerprint"] in previous_fps]
+        self.assertEqual(len(rechecked), checker.MAX_RECHECKS)
+        self.assertEqual(len({c["source_id"] for c in rechecked}), 6)
+        self.assertEqual(len({c["fingerprint"] for c in selected}), len(selected))
+
+    def test_probe_batch_rejects_stale_tampered_or_unknown_source(self):
+        uri = LINKS[0].split("#")[0]
+        item = {"fingerprint": checker.fingerprint(uri), "source_id": "avia",
+                "uri": uri, "https_latency_ms": 200, "youtube_page_ok": True,
+                "checked_at": checker.iso(NOW-timedelta(minutes=50))}
+        for update in ({"checked_at": checker.iso(NOW-timedelta(hours=3))},
+                       {"uri": uri + "?tamper=yes"}, {"source_id": "not-allowed"},
+                       {"fingerprint": "z"*64}, {"https_latency_ms": -1}):
+            previous = {"schema": 1, "checker": "xray-github-actions",
+                        "candidates": [{**item, **update}]}
+            self.assertEqual(checker.select_probe_batch({}, 2, previous, NOW), [])
+        self.assertEqual(checker.select_probe_batch({}, 2, {}, NOW), [])
+
+    def test_restart_veto_removes_previous_public_config_and_prioritizes_confirmed(self):
+        a, b = LINKS[0].split("#")[0], LINKS[2].split("#")[0]
+        fp_a, fp_b = checker.fingerprint(a), checker.fingerprint(b)
+        sampled = [{"fingerprint": fp_a, "source_id": "avia", "raw": a},
+                   {"fingerprint": fp_b, "source_id": "hamed", "raw": b}]
+        checked = [{"fingerprint": fp_a, "source_id": "avia", "https_ok": True,
+                    "youtube_page_ok": True, "https_latency_ms": 40},
+                   {"fingerprint": fp_b, "source_id": "hamed", "https_ok": True,
+                    "youtube_page_ok": False, "https_latency_ms": 400}]
+        restarted = [{"fingerprint": fp_a, "source_id": "avia", "restart_ok": False},
+                     {"fingerprint": fp_b, "source_id": "hamed", "restart_ok": True}]
+        before = {"schema":1,"checker":"xray-github-actions","candidates":[{
+            "fingerprint": fp_a, "source_id": "avia", "uri": a,
+            "https_latency_ms":40, "youtube_page_ok":True,
+            "checked_at":checker.iso(NOW-timedelta(minutes=30))}]}
+        post = checker.apply_restart_quality(checked, restarted)
+        published = json.loads(checker.pack_public_candidates(post, sampled, NOW, before, restarted))
+        self.assertEqual([c["fingerprint"] for c in published["candidates"]], [fp_b])
+        self.assertEqual(json.loads(checker.pack_feed(post, {}, NOW))["results"][0]["fingerprint"], fp_b)
+        self.assertEqual(len(checked), 2)  # no mutation of original evidence
+
+    def test_confirmed_restart_leads_legacy_android_feed_without_schema_change(self):
+        a, b = LINKS[0].split("#")[0], LINKS[2].split("#")[0]
+        sampled = [{"fingerprint": checker.fingerprint(a), "source_id": "avia", "raw": a},
+                   {"fingerprint": checker.fingerprint(b), "source_id": "hamed", "raw": b}]
+        checked = [{"fingerprint": checker.fingerprint(a), "source_id": "avia", "https_ok": True,
+                    "youtube_page_ok": True, "https_latency_ms": 20},
+                   {"fingerprint": checker.fingerprint(b), "source_id": "hamed", "https_ok": True,
+                    "youtube_page_ok": False, "https_latency_ms": 120}]
+        restarted = [{"fingerprint": checker.fingerprint(b), "restart_ok": True}]
+        doc = json.loads(checker.pack_public_candidates(checked, sampled, NOW, None, restarted))
+        self.assertEqual(doc["candidates"][0]["fingerprint"], checker.fingerprint(b))
+        self.assertEqual(set(doc["candidates"][0]), {
+            "fingerprint", "source_id", "uri", "https_latency_ms", "youtube_page_ok", "checked_at"
+        })
+
     def test_feed_no_secrets_and_bounded(self):
         node = {'fingerprint':'b'*64,'source_id':'3inker','https_ok':True,'youtube_page_ok':True,'https_latency_ms':200}
         result = checker.pack_feed([node],{},NOW)

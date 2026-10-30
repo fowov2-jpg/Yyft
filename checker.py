@@ -50,6 +50,7 @@ MAX_FEED_BYTES = 256 * 1024
 MAX_SOURCE_LINKS = 600
 MAX_WORKERS = 2
 MAX_RESTART_CHECKS = 3  # Extra real Xray launches, bounded per hour
+MAX_RECHECKS = 6  # Re-probe successful public routes; total initial Xray checks remains 24
 RESULT_TTL = timedelta(hours=8)
 PUBLICATION_TTL = timedelta(hours=6)
 ALLOWED_SCHEMES = {"vless", "vmess", "trojan", "ss"}
@@ -366,11 +367,12 @@ def pack_feed(checked, previous, now):
         raise ValueError("feed exceeded 256 KiB")
     return output
 
-def pack_public_candidates(checked, sampled, now, previous=None):
-    """Publish only public allowlisted GitHub subscription URIs verified THIS run.
+def pack_public_candidates(checked, sampled, now, previous=None, restart_results=None):
+    """Publish public, freshly Xray-verified URIs using Android's existing schema.
 
-    Public subscription credentials are intentionally public. Never include
-    manually imported, private or user-supplied configurations.
+    Previous candidates survive only their original short TTL. Successfully
+    restarted Xray routes lead the list; failed restarts revoke eligibility.
+    No mobile-operator whitelist or domain-fronting claim is made.
     """
     by_hash = {r["fingerprint"]: r for r in sampled}
     ok = sorted((r for r in checked if r["https_ok"] is True),
@@ -421,7 +423,10 @@ def pack_public_candidates(checked, sampled, now, previous=None):
                     continue
                 entries.append(item)
                 known.add(fp)
-    entries.sort(key=lambda r: (not r["youtube_page_ok"], r["https_latency_ms"], r["source_id"]))
+    confirmed = {r["fingerprint"] for r in (restart_results or [])
+                 if r.get("restart_ok") is True}
+    entries.sort(key=lambda r: (r["fingerprint"] not in confirmed,
+                                not r["youtube_page_ok"], r["https_latency_ms"], r["source_id"]))
     entries = entries[:MAX_PUBLIC_CANDIDATES]
     payload = json.dumps({"schema": 1, "checker": "xray-github-actions",
         "generated_at": iso(now), "valid_until": iso(now + timedelta(hours=2)),
@@ -472,6 +477,85 @@ def pick_balanced(collected, run_number, max_items=MAX_PER_RUN):
         if not changed:
             break
     return output
+
+def select_probe_batch(collected, run_number, previous_candidates, now):
+    """Spend up to six of 24 slots re-testing previously working public routes.
+
+    Only carry forward publicly published, previously Xray-checked URIs with
+    valid fingerprints, allowlisted source IDs and unexpired timestamps.
+    Every reused URI is actually rechecked this run before being published.
+    Never assume Github's network matches a mobile carrier.
+    """
+    prior = []
+    if (isinstance(previous_candidates, dict) and
+            previous_candidates.get("schema") == 1 and
+            previous_candidates.get("checker") == "xray-github-actions" and
+            isinstance(previous_candidates.get("candidates"), list)):
+        seen = set()
+        for item in previous_candidates["candidates"][:MAX_PUBLIC_CANDIDATES]:
+            if not isinstance(item, dict) or set(item) != {
+                    "fingerprint", "source_id", "uri", "https_latency_ms",
+                    "youtube_page_ok", "checked_at"}:
+                continue
+            fp, uri, sid = item["fingerprint"], item["uri"], item["source_id"]
+            if (not isinstance(fp, str) or not FINGERPRINT_RE.fullmatch(fp) or
+                    not isinstance(uri, str) or not 20 <= len(uri.encode("utf-8")) <= 4096 or
+                    "#" in uri or fingerprint(uri) != fp or fp in seen or sid not in SOURCES or
+                    uri.split("://", 1)[0].lower() not in ALLOWED_SCHEMES or
+                    type(item["https_latency_ms"]) is not int or
+                    not 1 <= item["https_latency_ms"] <= 30000 or
+                    type(item["youtube_page_ok"]) is not bool):
+                continue
+            try:
+                checked_at = parse_iso(item["checked_at"])
+            except (KeyError, ValueError, TypeError):
+                continue
+            if not timedelta(0) <= now - checked_at < timedelta(hours=2):
+                continue
+            seen.add(fp)
+            prior.append(item)
+    prior.sort(key=lambda c: (not c["youtube_page_ok"], c["https_latency_ms"], c["source_id"]))
+    diverse = []
+    used_sources = set()
+    for c in prior:
+        if c["source_id"] not in used_sources:
+            diverse.append(c)
+            used_sources.add(c["source_id"])
+            if len(diverse) == MAX_RECHECKS:
+                break
+    for c in prior:
+        if len(diverse) >= MAX_RECHECKS:
+            break
+        if c not in diverse:
+            diverse.append(c)
+    selected = [{"fingerprint": c["fingerprint"], "source_id": c["source_id"],
+                 "raw": c["uri"]} for c in diverse]
+    checked_fps = {r["fingerprint"] for r in selected}
+    # Rotation continues for the remaining budget; a repeated link uses only
+    # one probe, even if it appears in multiple subscriptions.
+    for fresh in pick_balanced(collected, run_number, MAX_PER_RUN + MAX_RECHECKS):
+        if len(selected) >= MAX_PER_RUN:
+            break
+        if fresh["fingerprint"] not in checked_fps:
+            selected.append(fresh)
+            checked_fps.add(fresh["fingerprint"])
+    return selected
+
+
+def apply_restart_quality(checked, restarts):
+    """A failed second independent Xray launch vetoes publishing that route.
+
+    Does not falsify latency or renew checked_at. The failure also revokes
+    a matching previous positive feed entry in the normal merge function.
+    """
+    failed = {r["fingerprint"] for r in restarts
+              if isinstance(r, dict) and r.get("restart_ok") is False}
+    return [
+        {**r, "https_ok": False, "youtube_page_ok": False,
+         "https_latency_ms": None} if r["fingerprint"] in failed else r
+        for r in checked
+    ]
+
 
 def check_xray_restarts(checked, sampled, xray, now, probe=None):
     """Re-launch Xray for up to 3 previously passing routes, across sources.
@@ -558,7 +642,8 @@ def main():
                 continue
         collected[sid] = links[:MAX_SOURCE_LINKS]
         print(f"source {sid}: {len(collected[sid])} candidates")  # never log raw URLs
-    sampled = pick_balanced(collected, run_number)
+    previous_candidates = load_previous(os.environ.get("PREVIOUS_CANDIDATES_URL", ""), now)
+    sampled = select_probe_batch(collected, run_number, previous_candidates, now)
     checked = []
     xray = os.environ.get("XRAY_BIN", "./xray")
     start = time.monotonic()
@@ -566,15 +651,17 @@ def main():
         futures = [pool.submit(test_candidate, item, xray) for item in sampled]
         for fut in concurrent.futures.as_completed(futures):
             checked.append(fut.result())
+    # A second independent Xray launch gates the selected top routes BEFORE
+    # public output. One failed restart invalidates an earlier positive result.
+    restart_results = check_xray_restarts(checked, sampled, xray, now)
+    checked = apply_restart_quality(checked, restart_results)
     previous = load_previous(os.environ.get("PREVIOUS_FEED_URL", ""), now)
     packed = pack_feed(checked, previous, now)
     output_dir = Path(os.environ.get("OUTPUT_DIR", "site"))
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / "feed.json").write_bytes(packed)
-    previous_candidates = load_previous(os.environ.get("PREVIOUS_CANDIDATES_URL", ""), now)
-    (output_dir / "candidates.json").write_bytes(pack_public_candidates(checked, sampled, now, previous_candidates))
-    # Restart a fresh Xray process for up to 3 positive routes from distinct sources.
-    restart_results = check_xray_restarts(checked, sampled, xray, now)
+    (output_dir / "candidates.json").write_bytes(
+        pack_public_candidates(checked, sampled, now, previous_candidates, restart_results))
     (output_dir / "restarts.json").write_bytes(pack_xray_restarts(restart_results, now))
     print(f"xray_restart_checks={len(restart_results)} restart_success={sum(r['restart_ok'] for r in restart_results)}")
 

@@ -38,6 +38,36 @@ class ManualPayloadCodecTest {
             "GET / HTTP/1.1[crlf]Host: " + "a".repeat(5000) + "[crlf][crlf]").valid)
     }
 
+    @Test fun vkPlainGetIsAValidStandaloneWebCheck() {
+        val wire = ManualPayloadCodec.encode(ManualPayloadCodec.WEBSITE_TEMPLATE)
+        assertTrue(wire.error.orEmpty(), wire.valid)
+        assertTrue(String(wire.bytes, Charsets.UTF_8).startsWith("GET / HTTP/1.1\r\n"))
+        assertTrue(String(wire.bytes, Charsets.UTF_8).contains("Host: vk.com\r\n"))
+    }
+
+    @Test fun warningsAreAdvisoryAndNoAutomaticRetry() {
+        assertTrue(ManualPayloadCodec.configurationWarning("vk.com", "80", true)!!
+            .contains("SSLException"))
+        assertTrue(ManualPayloadCodec.configurationWarning("vk.com", "443", true)!!
+            .contains("не наш HTTP CONNECT-прокси"))
+        assertTrue(ManualPayloadCodec.configurationWarning("test.example", "443", false)!!
+            .contains("RAW"))
+        assertTrue(ManualPayloadCodec.configurationWarning("test.example", "443", true) == null)
+    }
+
+    @Test fun separatesTlsFailureFromSuccessfulTlsButBadHttp() {
+        assertTrue(ManualPayloadCodec.failureSummary("SIM", "TLS", "SSLException", true, 80)
+            .contains("TLS-рукопожатие на порту 80"))
+        assertTrue(ManualPayloadCodec.failureSummary("SIM", "DNS", "UnknownHostException", true, 443)
+            .contains("DNS"))
+        assertTrue(ManualPayloadCodec.failureSummary("SIM", "TCP", "SocketTimeoutException", true, 443)
+            .contains("TCP"))
+        assertTrue(ManualPayloadCodec.responseCategory("HTTP/1.1 400 Bad Request")
+            .contains("HTTP 400"))
+        assertFalse(ManualPayloadCodec.responseCategory("HTTP/1.1 400 Bad Request")
+            .contains("успешный VPN"))
+    }
+
     @Test fun gatewayResponseNeverClaimsVpnConfirmation() {
         assertTrue(ManualPayloadCodec.responseCategory("HTTP/1.1 200 OK")
             .contains("НЕ подтверждены"))

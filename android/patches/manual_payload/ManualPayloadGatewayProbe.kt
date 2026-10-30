@@ -42,13 +42,16 @@ internal object ManualPayloadGatewayProbe {
         } ?: return if (cellular) "Мобильная сеть недоступна." else "Wi-Fi недоступен."
         val start = SystemClock.elapsedRealtime()
         val type = if (cellular) "SIM" else "Wi-Fi"
+        var stage = "DNS"
         return try {
             val addr = network.getAllByName(host).firstOrNull()
                 ?: return "DNS выбранной сети не разрешил адрес шлюза."
+            stage = "TCP"
             network.socketFactory.createSocket().use { raw ->
                 raw.soTimeout = 4_000
                 raw.connect(InetSocketAddress(addr, port), 4_000)
                 if (tls) {
+                    stage = "TLS"
                     val ssl = (SSLSocketFactory.getDefault() as SSLSocketFactory)
                         .createSocket(raw, host, port, false) as SSLSocket
                     ssl.use { socket ->
@@ -57,16 +60,18 @@ internal object ManualPayloadGatewayProbe {
                         params.endpointIdentificationAlgorithm = "HTTPS"
                         socket.sslParameters = params
                         socket.startHandshake()
+                        stage = "HTTP"
                         exchange(socket.getInputStream(), socket.getOutputStream(), payload,
-                            type, SystemClock.elapsedRealtime() - start)
+                            type, start)
                     }
                 } else {
+                    stage = "HTTP"
                     exchange(raw.getInputStream(), raw.getOutputStream(), payload,
-                        type, SystemClock.elapsedRealtime() - start)
+                        type, start)
                 }
             }
         } catch (e: Exception) {
-            "$type · ${e.javaClass.simpleName}. Ответ шлюза не подтверждён; VPN не менялся."
+            ManualPayloadCodec.failureSummary(type, stage, e.javaClass.simpleName, tls, port)
         }
     }
 
@@ -75,7 +80,7 @@ internal object ManualPayloadGatewayProbe {
         outputStream: java.io.OutputStream,
         payload: ManualPayloadCodec.Encoding,
         type: String,
-        elapsedBeforeRead: Long
+        startMs: Long
     ): String {
         BufferedOutputStream(outputStream).apply {
             write(payload.bytes)
@@ -93,7 +98,8 @@ internal object ManualPayloadGatewayProbe {
         val first = if (length == 0) null else
             String(result, 0, length, Charsets.ISO_8859_1)
                 .filter { it.code in 32..126 }.take(120)
-        return "$type · до ответа ${elapsedBeforeRead}мс + чтение · " +
+        val duration = SystemClock.elapsedRealtime() - startMs
+        return "$type · HTTP-ответ за ${duration}мс · " +
             ManualPayloadCodec.responseCategory(first)
     }
 }

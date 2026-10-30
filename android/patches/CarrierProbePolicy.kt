@@ -2,6 +2,11 @@ package com.secureconnect.app.ui.screens.settings
 
 /** Public website accessibility is not evidence of VPN whitelist eligibility. */
 internal object CarrierProbePolicy {
+    fun progress(index: Int, total: Int, label: String, completed: List<String>): String =
+        "Проверка " + index + "/" + total + ": " + label + "\n" +
+            completed.joinToString("\n")
+
+
     fun conclusion(cellular: Boolean, vk: Boolean, ordinaryHttps: Boolean,
                    vpnConnected: Boolean): String {
         if (!cellular) return "Мобильная сеть не найдена. Включите мобильные данные. Результат не определён."

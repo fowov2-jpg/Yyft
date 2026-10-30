@@ -29,6 +29,7 @@ import java.net.URL
 import javax.net.ssl.HttpsURLConnection
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -47,52 +48,73 @@ internal object CarrierNetworkProbe {
         Target("GitHub-конфигурации", "https://fowov2-jpg.github.io/Yyft/candidates.json")
     )
     private fun probe(network: Network, url: String): Probe {
-        val c = network.openConnection(URL(url)) as HttpsURLConnection
-        try {
-            c.connectTimeout = 3_500
-            c.readTimeout = 3_500
-            c.instanceFollowRedirects = false
-            c.setRequestProperty("Accept", "text/html,application/json")
-            c.setRequestProperty("Accept-Encoding", "identity")
-            val status = c.responseCode
-            return Probe("HTTP " + status, status in 200..399)
+        // Network.openConnection can itself throw (not just responseCode),
+        // especially while Xiaomi is enforcing a VPN lockdown / kill switch.
+        var connection: HttpsURLConnection? = null
+        return try {
+            connection = network.openConnection(URL(url)) as HttpsURLConnection
+            connection.connectTimeout = 3_500
+            connection.readTimeout = 3_500
+            connection.instanceFollowRedirects = false
+            connection.setRequestProperty("Accept", "text/html,application/json")
+            connection.setRequestProperty("Accept-Encoding", "identity")
+            val status = connection.responseCode
+            Probe("HTTP " + status, status in 200..399)
+        } catch (_: java.net.SocketTimeoutException) {
+            Probe("тайм-аут", false)
+        } catch (_: javax.net.ssl.SSLException) {
+            Probe("ошибка TLS", false)
+        } catch (_: SecurityException) {
+            Probe("Android запретил прямое подключение", false)
         } catch (_: java.io.IOException) {
-            return Probe("нет ответа", false)
+            Probe("соединение недоступно", false)
+        } catch (_: RuntimeException) {
+            Probe("сетевой запрос не выполнен", false)
         } finally {
-            c.disconnect()
+            connection?.disconnect()
         }
     }
 
-    suspend fun run(context: Context): String = withContext(Dispatchers.IO) {
-        val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE)
-            as? ConnectivityManager ?: return@withContext "Служба сети недоступна."
-        val cellular = try {
-            manager.allNetworks.firstOrNull { n ->
-                val caps = manager.getNetworkCapabilities(n)
-                caps?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) == true &&
-                    !caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
+    suspend fun run(context: Context, onProgress: (String) -> Unit): String =
+        withContext(Dispatchers.IO) {
+            suspend fun show(value: String) {
+                withContext(Dispatchers.Main) { onProgress(value) }
             }
-        } catch (_: SecurityException) { null }
-        if (cellular == null) {
-            return@withContext CarrierProbePolicy.conclusion(
-                cellular = false, vk = false, ordinaryHttps = false, vpnConnected = false)
+            show("Проверяю наличие мобильной сети…")
+            val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE)
+                as? ConnectivityManager
+                ?: return@withContext "Служба сети Android недоступна."
+            val cellular = try {
+                manager.allNetworks.firstOrNull { n ->
+                    val caps = manager.getNetworkCapabilities(n)
+                    caps?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) == true &&
+                        !caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
+                }
+            } catch (_: SecurityException) { null }
+            if (cellular == null) {
+                return@withContext CarrierProbePolicy.conclusion(
+                    cellular = false, vk = false, ordinaryHttps = false, vpnConnected = false)
+            }
+            val lines = mutableListOf("Прямые HTTPS-запросы через мобильную сеть:")
+            val found = mutableMapOf<String, Boolean>()
+            for ((index, endpoint) in endpoints.withIndex()) {
+                show(CarrierProbePolicy.progress(index + 1, endpoints.size,
+                    endpoint.label, lines))
+                val checked = probe(cellular, endpoint.uri)
+                found[endpoint.label] = checked.reachable
+                lines.add(endpoint.label + ": " + checked.text)
+                show(CarrierProbePolicy.progress(
+                    index + 1, endpoints.size, "следующий этап", lines))
+            }
+            val connected = VpnController.state.value is VpnState.Connected
+            lines.add(CarrierProbePolicy.conclusion(
+                cellular = true,
+                vk = found["VK"] == true,
+                ordinaryHttps = found["Обычный HTTPS"] == true,
+                vpnConnected = connected
+            ))
+            lines.joinToString("\n")
         }
-        val lines = mutableListOf("Прямые HTTPS-запросы через мобильную сеть:")
-        val found = mutableMapOf<String, Boolean>()
-        for (endpoint in endpoints) {
-            val checked = probe(cellular, endpoint.uri)
-            found[endpoint.label] = checked.reachable
-            lines.add(endpoint.label + ": " + checked.text)
-        }
-        val connected = VpnController.state.value is VpnState.Connected
-        lines.add(CarrierProbePolicy.conclusion(
-            cellular = true,
-            vk = found["VK"] == true,
-            ordinaryHttps = found["Обычный HTTPS"] == true,
-            vpnConnected = connected
-        ))
-        lines.joinToString("\n")
-    }
 }
 
 @Composable
@@ -117,14 +139,19 @@ internal fun CarrierNetworkDiagnosticsCard() {
                 color = ScTextSecondary, style = MaterialTheme.typography.bodySmall)
             Button(enabled = !running, onClick = {
                 running = true
-                result = "Проверка мобильного интернета…"
+                result = "Кнопка нажата. Начинаю проверку мобильной сети…"
                 scope.launch {
                     try {
-                        result = CarrierNetworkProbe.run(context.applicationContext)
+                        val answer = withTimeoutOrNull(35_000L) {
+                            CarrierNetworkProbe.run(context.applicationContext) {
+                                progress -> result = progress
+                            }
+                        }
+                        result = answer ?: result + "\nПревышено время ожидания. Повторите позже."
                     } catch (e: CancellationException) {
                         throw e
                     } catch (_: Exception) {
-                        result = "Проверка не завершилась. VPN не изменён."
+                        result += "\nПроверка завершилась ошибкой. VPN не изменён."
                     } finally {
                         running = false
                     }

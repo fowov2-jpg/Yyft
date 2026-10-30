@@ -94,6 +94,11 @@ def run(root: Path, workflow: Path) -> dict:
             "instanceFollowRedirects = false" in carrier and
             "HttpsURLConnection" in carrier and
             "rememberCoroutineScope()" in carrier and
+            "Кнопка нажата" in carrier and
+            "withContext(Dispatchers.Main)" in carrier and
+            "CarrierProbePolicy.progress" in carrier and
+            "withTimeoutOrNull(35_000L)" in carrier and
+            "connection = network.openConnection(URL(url))" in carrier and
             "Ничего не отправляется в наш GitHub" in carrier and
             "Нельзя утверждать" in carrier_policy and
             "https://vk.com/" in carrier)

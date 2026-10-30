@@ -4,6 +4,15 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CarrierProbePolicyTest {
+    @Test fun immediateVisibleProgressIncludesPreviousResults() {
+        val text = CarrierProbePolicy.progress(2, 4, "Яндекс",
+            listOf("VK: HTTP 200", "Обычный HTTPS: нет ответа"))
+        assertTrue(text.contains("Проверка 2/4: Яндекс"))
+        assertTrue(text.contains("VK: HTTP 200"))
+        assertTrue(text.contains("Обычный HTTPS: нет ответа"))
+    }
+
+
     @Test fun selectiveVkReachabilityIsNotPresentedAsProofOfVpnWhitelisting() {
         val msg = CarrierProbePolicy.conclusion(true, true, false, true)
         assertTrue(msg.contains("VK отвечает"))

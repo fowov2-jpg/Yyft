@@ -59,9 +59,6 @@ patch(navigation,
     "import com.secureconnect.app.ui.screens.settings.PremiumSettingsScreen\n"
     "import com.secureconnect.app.ui.screens.settings.ManualPayloadLabScreen\n")
 patch(navigation,
-    "ManualPayloadLabScreen(onBack = { nav.popBackStack() })",
-    "ManualPayloadLabScreen(vm = vm, onBack = { nav.popBackStack() })")
-patch(navigation,
     "PremiumSettingsScreen(vm, onBack = { nav.popBackStack() })",
     "PremiumSettingsScreen(vm, onBack = { nav.popBackStack() },\n"
     "                    onPayloadLab = { nav.navigate(Screen.PayloadLab.route) })")
@@ -71,6 +68,10 @@ patch(navigation,
     '                ManualPayloadLabScreen(onBack = { nav.popBackStack() })\n'
     '            }\n'
     '            composable(Screen.Technical.route) {')
+
+patch(navigation,
+    "ManualPayloadLabScreen(onBack = { nav.popBackStack() })",
+    "ManualPayloadLabScreen(vm = vm, onBack = { nav.popBackStack() })")
 
 screenroutes = base / "ui/navigation/Screen.kt"
 patch(screenroutes,

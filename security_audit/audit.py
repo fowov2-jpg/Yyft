@@ -110,7 +110,8 @@ def run(root: Path, workflow: Path) -> dict:
             "CarrierProbePolicy.routeComparison" in carrier and
             "UnknownHostException" in carrier and
             "ConnectException" in carrier and
-            "Ничего не отправляется в наш GitHub" in carrier and
+            "Ничего не отправляется " in carrier and
+            "в наш GitHub." in carrier and
             "Нельзя утверждать" in carrier_policy and
             "https://vk.com/" in carrier)
     require("home_countdown_uses_persisted_deadline_foreground_only",

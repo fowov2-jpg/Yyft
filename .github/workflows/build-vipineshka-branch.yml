@@ -106,6 +106,9 @@ jobs:
       - name: Restore opt-in auto-connect without polling or requiring verified reserves
         run: python android/patches/apply_autostart_settings_fix.py android/build-input/SecureConnect-2.4.7
 
+      - name: Install manual HTTP Payload editor, one-shot cellular test and JUnit
+        run: python android/patches/apply_manual_payload_lab.py android/build-input/SecureConnect-2.4.7
+
       - name: Install carrier diagnostics policy unit tests
         shell: bash
         run: |

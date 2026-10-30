@@ -32,7 +32,7 @@ class CarrierProbePolicyTest {
     }
 
     @Test fun defaultRouteControlPreventsFalseCarrierAttribution() {
-        val explicitBroken = CarrierProbePolicy.routeComparison(false, true)
+        val explicitBroken = CarrierProbePolicy.routeComparison(true, false)
         assertTrue(explicitBroken.contains("прежний метод диагностики"))
         assertTrue(explicitBroken.contains("не блокировка"))
         val bothBroken = CarrierProbePolicy.routeComparison(false, false)

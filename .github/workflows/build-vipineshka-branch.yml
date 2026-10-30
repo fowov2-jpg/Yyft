@@ -97,6 +97,9 @@ jobs:
       - name: Add zero-pool evidence diagnostics (no automatic qualification)
         run: python android/patches/apply_pool_diagnostics.py android/build-input/SecureConnect-2.4.7
 
+      - name: Fix empty verified pool during moderate native memory pressure
+        run: python android/patches/apply_zero_pool_rescue.py android/build-input/SecureConnect-2.4.7
+
       - name: Install carrier diagnostics policy unit tests
         shell: bash
         run: |

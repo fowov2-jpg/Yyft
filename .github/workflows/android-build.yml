@@ -104,6 +104,12 @@ jobs:
         run: |
           cp android/ci-tests/PublicCandidateSourcePolicyTest.kt android/build-input/SecureConnect-2.4.7/app/src/test/java/com/secureconnect/app/vpn/PublicCandidateSourcePolicyTest.kt
 
+      - name: Install cloud fallback policy regression tests
+        shell: bash
+        run: |
+          cp android/ci-tests/PublicCandidateFallbackPolicyTest.kt \
+            android/build-input/SecureConnect-2.4.7/app/src/test/java/com/secureconnect/app/vpn/PublicCandidateFallbackPolicyTest.kt
+
       - name: Compile installable debug APK
         working-directory: android/build-input/SecureConnect-2.4.7
         run: ./gradlew --no-daemon --stacktrace :app:assembleDebug

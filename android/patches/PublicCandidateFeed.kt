@@ -120,7 +120,12 @@ object PublicCandidateFeed {
                         XrayConfigBuilder.build(server, null) == null) continue
                     nodes.putIfAbsent(server.id, server.copy(ping = 0))
                 }
-                // An empty valid feed is a legitimate result, not an error.
+                // A nonempty publication may contain only URI formats unsupported
+                // by this Android build. Try the independent Raw endpoint rather
+                // than falsely recording a successful cloud import.
+                if (PublicCandidateFallbackPolicy.tryAlternateEndpoint(
+                        candidates.length(), nodes.size)) continue
+                // A genuinely empty valid publication remains a valid result.
                 p.edit().putLong("success", now)
                     .putStringSet("ids", nodes.keys.toSet()).apply()
                 if (nodes.isEmpty()) return@withContext false

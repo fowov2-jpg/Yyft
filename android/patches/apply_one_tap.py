@@ -7,6 +7,7 @@ import sys
 root = Path(sys.argv[1]).resolve()
 scanner = root / "app/src/main/java/com/secureconnect/app/vpn/ServerScanner.kt"
 target = root / "app/src/main/java/com/secureconnect/app/vpn/PublicCandidateFeed.kt"
+fallback_target = root / "app/src/main/java/com/secureconnect/app/vpn/PublicCandidateFallbackPolicy.kt"
 gradle = root / "app/build.gradle.kts"
 source = Path(__file__).with_name("PublicCandidateFeed.kt")
 
@@ -55,6 +56,8 @@ replace(anchor, """        if (publicCandidatesJob?.isActive != true) {
     fun request(""")
 scanner.write_text(text, encoding="utf-8")
 shutil.copyfile(source, target)
+shutil.copyfile(Path(__file__).with_name("PublicCandidateFallbackPolicy.kt"),
+                fallback_target)
 shutil.copyfile(Path(__file__).with_name("PublicCandidateSourcePolicy.kt"),
                 root / "app/src/main/java/com/secureconnect/app/vpn/PublicCandidateSourcePolicy.kt")
 # Deterministic Android JVM regression tests: no emulator and no third-party VPN traffic.

@@ -57,4 +57,31 @@ patch('ui/components/ConnectButton.kt', [
  ('Color(0xFF435565)', 'Color(0xFF5624B4)'),
  ('Color(0xFF172431)', 'Color(0xFF0D1331)')
 ])
+
+strings = root / 'app/src/main/res/values/strings.xml'
+text = strings.read_text(encoding='utf-8')
+previous = '<string name="app_name">SecureConnect</string>'
+updated = '<string name="app_name">VipineshkaVPN</string>'
+if updated not in text:
+    if text.count(previous) != 1:
+        raise SystemExit('Unexpected app label resource; refusing to overwrite')
+    strings.write_text(text.replace(previous, updated, 1), encoding='utf-8')
+
+launcher = root / 'app/src/main/res/drawable/ic_launcher_foreground.xml'
+current = launcher.read_text(encoding='utf-8')
+crown = '''<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#FF9B60FF"
+        android:pathData="M19,41 L35,53 L44,31 L54,50 L65,31 L74,53 L89,41 L82,72 L26,72 Z" />
+    <path android:fillColor="#FFB998FF"
+        android:pathData="M28,75 L80,75 L80,81 L28,81 Z" />
+</vector>
+'''
+if current != crown:
+    if 'android:pathData="M54,26 L78,35' not in current:
+        raise SystemExit('Unknown launcher icon; refusing to overwrite')
+    launcher.write_text(crown, encoding='utf-8')
+
 print('Vipineshka real-app palette patch: ok')

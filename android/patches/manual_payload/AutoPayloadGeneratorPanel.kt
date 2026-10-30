@@ -155,8 +155,7 @@ fun AutoPayloadGeneratorPanel(
                 enabled = running,
                 onClick = {
                     jobHolder.value?.cancel()
-                    status = "STOP: новые попытки отменены; текущий сокет ждёт тайм-аут."
-                    running = false
+                    status = "STOP: новые попытки отменены; текущий сокет завершит работу по тайм-ауту."
                 }
             ) { Text("STOP") }
         }

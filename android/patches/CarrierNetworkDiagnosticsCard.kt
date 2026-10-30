@@ -35,7 +35,8 @@ import kotlinx.coroutines.withContext
 
 /**
  * Explicit opt-in on the phone's cellular network.
- * Network.openConnection uses the selected physical network, bypassing the VPN.
+ * Network.openConnection selects a physical network, but Android may block
+ * that network entirely while a VPN is connected (allowBypass/lockdown policy).
  * Never auto-run, never upload telemetry, never change VPN, SNI or routing.
  */
 internal object CarrierNetworkProbe {
@@ -80,7 +81,13 @@ internal object CarrierNetworkProbe {
             suspend fun show(value: String) {
                 withContext(Dispatchers.Main) { onProgress(value) }
             }
-            show("Проверяю наличие мобильной сети…")
+            show("Проверяю состояние VPN и мобильной сети…")
+            // Explicit fail-closed preflight: an active VPN can prevent ALL
+            // network.openConnection calls from bypassing its tunnel.
+            // Do not produce false claims that MegaFon blocked every website.
+            if (VpnController.state.value is VpnState.Connected) {
+                return@withContext CarrierProbePolicy.vpnActiveNotice()
+            }
             val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE)
                 as? ConnectivityManager
                 ?: return@withContext "Служба сети Android недоступна."
@@ -128,14 +135,16 @@ internal fun CarrierNetworkDiagnosticsCard() {
     NativeGroup {
         Column(Modifier.fillMaxWidth().padding(18.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("Диагностика мобильной сети (МегаФон)",
+            Text("Диагностика мобильной сети (оператор не определён)",
                 color = ScTextPrimary, style = MaterialTheme.typography.titleMedium)
             Text(
-                "По нажатию будут выполнены четыре небольших HTTPS-запроса " +
-                    "НАПРЯМУЮ через мобильный интернет, минуя VPN: VK, Яндекс, " +
-                    "контрольный сайт и GitHub. Это раскрывает этим сайтам ваш " +
-                    "мобильный IP-адрес. Ничего не отправляется в наш GitHub. " +
-                    "Проверка доступности сайтов не доказывает ускорение VPN.",
+                "При подключённом VPN тест сайтов не запускается: Android " +
+                    "может блокировать прямые соединения. Только без активного VPN " +
+                    "по вашему нажатию проверяются VK, Яндекс, обычный HTTPS и GitHub " +
+                    "через мобильную сеть. В этом случае сайты увидят мобильный " +
+                    "IP-адрес. Ничего не отправляется в наш GitHub. " +
+                    "Оператор SIM не определяется автоматически. " +
+                    "Доступность сайтов не доказывает ускорение VPN.",
                 color = ScTextSecondary, style = MaterialTheme.typography.bodySmall)
             Button(enabled = !running, onClick = {
                 running = true

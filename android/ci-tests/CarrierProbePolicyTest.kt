@@ -4,6 +4,25 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CarrierProbePolicyTest {
+    @Test fun activeVpnDoesNotClaimThatMegafonBlockedAllFourSites() {
+        val notice = CarrierProbePolicy.vpnActiveNotice()
+        assertTrue(notice.contains("не запускалась"))
+        assertTrue(notice.contains("VPN сейчас подключён"))
+        assertTrue(notice.contains("не подтверждают блокировку"))
+        assertTrue(notice.contains("Kill Switch не изменены"))
+        assertTrue(notice.contains("Нельзя утверждать"))
+        val oldScreenshot = CarrierProbePolicy.conclusion(true, false, false, true)
+        assertTrue(oldScreenshot.contains("не запускалась"))
+        assertTrue(!oldScreenshot.contains("Оба сайта не ответили"))
+    }
+
+    @Test fun noActiveVpnDoesNotInventOperatorClassification() {
+        val unknown = CarrierProbePolicy.conclusion(true, false, false, false)
+        assertTrue(unknown.contains("Причина не определена"))
+        assertTrue(unknown.contains("Нельзя утверждать"))
+    }
+
+
     @Test fun immediateVisibleProgressIncludesPreviousResults() {
         val text = CarrierProbePolicy.progress(2, 4, "Яндекс",
             listOf("VK: HTTP 200", "Обычный HTTPS: нет ответа"))

@@ -197,6 +197,50 @@ jobs:
             sha256sum android/build-input/SecureConnect-2.4.7/app/build/outputs/apk/debug/app-debug.apk
           fi
 
+      - name: Package integrated Android Studio source (without builds or secrets)
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile, ZIP_DEFLATED
+          root = Path("android/build-input/SecureConnect-2.4.7")
+          output = Path("android/VipineshkaVPN-HTTP-AutoGenerator-source.zip")
+          ignore_dirs = {"build", ".gradle", ".idea", ".git", "captures"}
+          ignore_files = {"local.properties", "gradle.properties.local", "google-services.json"}
+          ignore_suffixes = (".jks", ".keystore", ".p12", ".pem", ".key")
+          n = 0
+          with ZipFile(output, "w", ZIP_DEFLATED, compresslevel=7) as z:
+              for p in sorted(root.rglob("*")):
+                  if not p.is_file() or any(x in ignore_dirs for x in p.relative_to(root).parts):
+                      continue
+                  if p.name in ignore_files or p.name.endswith(ignore_suffixes):
+                      continue
+                  z.write(p, "VipineshkaVPN/" + str(p.relative_to(root)))
+                  n += 1
+              z.writestr("VipineshkaVPN/README-OPEN.txt",
+                  "VipineshkaVPN - Android Studio project with existing SecureConnect/Xray engine\n"
+                  "1. Extract the ZIP into a folder.\n"
+                  "2. Open the VipineshkaVPN folder in Android Studio.\n"
+                  "3. Install Android SDK 36 and JDK 21; let Gradle sync.\n"
+                  "4. Assemble app: ./gradlew :app:assembleDebug\n"
+                  "5. The automatic HTTP-payload experiment is in Settings / HTTP Payload.\n"
+                  "6. The test requires an authorized HTTP CONNECT gateway and does not "
+                  "alter Xray/VPN or guarantee whitelist access.\n")
+          assert n > 100, n
+          print("packaged", n, "integrated source files", output.stat().st_size)
+          PY
+
+      - name: Upload full integrated Android Studio source ZIP
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: VipineshkaVPN-HTTP-AutoGenerator-AndroidStudio-source
+          path: android/VipineshkaVPN-HTTP-AutoGenerator-source.zip
+          if-no-files-found: error
+          retention-days: 7
+
       # A failed compiler, test or security audit must never publish installable APK.
       - name: Upload APK
         if: success()

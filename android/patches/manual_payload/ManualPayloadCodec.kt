@@ -99,7 +99,7 @@ internal object ManualPayloadCodec {
         Regex("^HTTP/1\\.[01] 2\\d\\d( |$)").containsMatchIn(line) ->
             "HTTP 2xx: шлюз ответил. VPN и обход ограничений НЕ подтверждены."
         line.startsWith("HTTP/1.1 400") || line.startsWith("HTTP/1.0 400") ->
-            "HTTP 400: сервер принял TLS/HTTP-соединение, но отклонил запрос. Это не HTTP CONNECT-шлюз и не подтверждение VPN."
+            "HTTP 400: сервер принял TLS/HTTP-соединение, но отклонил запрос. Ответ 400 не доказывает ни наличие, ни отсутствие CONNECT-прокси; VPN не подтверждён."
         line.startsWith("HTTP/1.") ->
             "Ответ шлюза: " + line.take(110) + ". VPN не подтверждён."
         else -> "Нестандартный ответ шлюза. VPN не подтверждён."

@@ -69,7 +69,7 @@ swap(vm,'            logs = _logs.value.toList()\n        )\n    )\n\n    init {
         "\\nNote: opening Servers does not trigger Xray or server scans.\\n"
 
     init {''')
-swap(vm,'    fun selectAutoServer() {\n        setConnectionMode(ConnectionMode.AUTO)',
+swap(vm,'    fun selectAutoServer() {',
 '''    fun selectAutoServer() {
         lastOneTapTime = "${diagnosticClock()} state=${VpnController.state.value.javaClass.simpleName} cached=${_servers.value.size} pending=${autoSelectionPending.value}"
         setConnectionMode(ConnectionMode.AUTO)''')

@@ -278,12 +278,60 @@ def probe_https(port, hostname, path, timeout=5):
             raise OSError("invalid HTTPS response")
         return int(status.split()[1]), int((time.monotonic()-started)*1000)
 
+def probe_https_body(port, hostname="www.google.com", path="/robots.txt",
+                     timeout=6, minimum=512, limit=8192):
+    """Verify an actual HTTPS RESPONSE BODY via SOCKS5 + certificate-checked TLS.
+
+    Only fixed public endpoints; download is capped. No carrier claim or speed
+    estimate is made from this short request.
+    """
+    started = time.monotonic()
+    with socket.create_connection(("127.0.0.1", port), timeout=timeout) as sock:
+        sock.settimeout(timeout)
+        sock.sendall(b"\x05\x01\x00")
+        if exact(sock, 2) != b"\x05\x00":
+            raise OSError("SOCKS auth failed")
+        h = hostname.encode("ascii")
+        sock.sendall(b"\x05\x01\x00\x03" + bytes([len(h)]) + h + (443).to_bytes(2, "big"))
+        ans = exact(sock, 4)
+        if len(ans) != 4 or ans[1] != 0 or ans[3] not in (1, 3, 4):
+            raise OSError("SOCKS dial failed")
+        if ans[3] == 1:
+            exact(sock, 4)
+        elif ans[3] == 4:
+            exact(sock, 16)
+        else:
+            exact(sock, exact(sock, 1)[0])
+        exact(sock, 2)
+        with ssl.create_default_context().wrap_socket(sock, server_hostname=hostname) as tls:
+            tls.settimeout(timeout)
+            tls.sendall(("GET " + path + " HTTP/1.1\r\nHost: " + hostname +
+                         "\r\nConnection: close\r\nAccept-Encoding: identity\r\n"
+                         "User-Agent: SecureConnect-Checker/1\r\n\r\n").encode("ascii"))
+            data = bytearray()
+            while len(data) < limit:
+                part = tls.recv(min(2048, limit-len(data)))
+                if not part:
+                    break
+                data.extend(part)
+                if b"\r\n\r\n" in data:
+                    head, body = bytes(data).split(b"\r\n\r\n", 1)
+                    if len(head) > 4096:
+                        raise OSError("oversize headers")
+                    status = head.split(b"\r\n", 1)[0].split()
+                    if len(status) < 2 or not status[0].startswith(b"HTTP/") or status[1] != b"200":
+                        raise OSError("HTTP body endpoint failed")
+                    if len(body) >= minimum:
+                        return len(body), int((time.monotonic()-started)*1000)
+    raise OSError("incomplete HTTPS response body")
+
+
 def reserve_port():
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
         return s.getsockname()[1]
 
-def test_candidate(item, xray):
+def test_candidate(item, xray, check_payload=False):
     result = {"fingerprint": item["fingerprint"], "source_id": item["source_id"], "https_ok": False, "youtube_page_ok": False, "https_latency_ms": None}
     try:
         outbound = outbound_from_uri(item["raw"])
@@ -307,6 +355,13 @@ def test_candidate(item, xray):
                     status, ms = probe_https(port, "www.gstatic.com", "/generate_204")
                     if status == 204:
                         result.update(https_ok=True, https_latency_ms=ms)
+                        if check_payload:
+                            result.update(payload_ok=False, download_bytes=0, download_ms=None)
+                            try:
+                                n, duration = probe_https_body(port)
+                                result.update(payload_ok=True, download_bytes=n, download_ms=duration)
+                            except (OSError, ValueError, ssl.SSLError):
+                                pass
                         try:
                             yt, _ = probe_https(port, "www.youtube.com", "/")
                             result["youtube_page_ok"] = yt in (200, 301, 302, 303, 307, 308)
@@ -557,7 +612,7 @@ def apply_restart_quality(checked, restarts):
     ]
 
 
-def check_xray_restarts(checked, sampled, xray, now, probe=None):
+def check_xray_restarts(checked, sampled, xray, now, probe=None, payload_records=None):
     """Re-launch Xray for up to 3 previously passing routes, across sources.
 
     Each test_candidate invocation starts and stops a NEW Xray process with
@@ -566,7 +621,7 @@ def check_xray_restarts(checked, sampled, xray, now, probe=None):
     No VPN credentials or raw URIs are written to the result.
     """
     if probe is None:
-        probe = test_candidate
+        probe = lambda item, binary: test_candidate(item, binary, check_payload=True)
     originals = {r["fingerprint"]: r for r in sampled}
     ordered = sorted(
         (r for r in checked if r.get("https_ok") is True and r.get("fingerprint") in originals),
@@ -596,6 +651,15 @@ def check_xray_restarts(checked, sampled, xray, now, probe=None):
             "restart_https_latency_ms": retry.get("https_latency_ms") if ok else None,
             "checked_at": iso(now),
         })
+        if payload_records is not None:
+            n, delay_ms = retry.get("download_bytes", 0), retry.get("download_ms")
+            good = (ok and retry.get("payload_ok") is True and type(n) is int
+                    and 512 <= n <= 8192 and type(delay_ms) is int and delay_ms >= 0)
+            payload_records.append({
+                "fingerprint": item["fingerprint"], "source_id": item["source_id"],
+                "payload_ok": bool(good), "download_bytes": n if good else 0,
+                "download_ms": delay_ms if good else None, "checked_at": iso(now)
+            })
     return records
 
 
@@ -629,6 +693,41 @@ def pack_xray_restarts(records, now):
     return payload
 
 
+def pack_payload_probes(records, now):
+    """Separate and strictly validated diagnostic; unchanged Android feed."""
+    if len(records) > MAX_RESTART_CHECKS:
+        raise ValueError("too many payload tests")
+    for row in records:
+        if not isinstance(row, dict) or set(row) != {
+                "fingerprint", "source_id", "payload_ok",
+                "download_bytes", "download_ms", "checked_at"}:
+            raise ValueError("unexpected payload fields")
+        if not isinstance(row["fingerprint"], str) or not FINGERPRINT_RE.fullmatch(row["fingerprint"]):
+            raise ValueError("invalid payload fingerprint")
+        if row["source_id"] not in SOURCES or type(row["payload_ok"]) is not bool:
+            raise ValueError("invalid payload source")
+        n, ms = row["download_bytes"], row["download_ms"]
+        if type(n) is not int or (ms is not None and type(ms) is not int):
+            raise ValueError("invalid payload value types")
+        if row["payload_ok"]:
+            if n < 512 or n > 8192 or ms is None or ms < 0:
+                raise ValueError("invalid successful payload")
+        elif n != 0 or ms is not None:
+            raise ValueError("failure cannot claim transferred bytes")
+        if row["checked_at"] != iso(now):
+            raise ValueError("payload time mismatch")
+    output = json.dumps({
+        "schema": 1, "checker": "xray-github-actions",
+        "kind": "xray_https_download", "android_tun_tested": False,
+        "megafon_tested": False, "upload_speed_tested": False,
+        "generated_at": iso(now), "valid_until": iso(now+timedelta(hours=2)),
+        "results": records
+    }, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    if len(output) > 8192:
+        raise ValueError("payload report exceeded limit")
+    return output
+
+
 def main():
     now = datetime.now(timezone.utc)
     run_number = int(os.environ.get("GITHUB_RUN_NUMBER", "1"))
@@ -653,7 +752,9 @@ def main():
             checked.append(fut.result())
     # A second independent Xray launch gates the selected top routes BEFORE
     # public output. One failed restart invalidates an earlier positive result.
-    restart_results = check_xray_restarts(checked, sampled, xray, now)
+    download_reports = []
+    restart_results = check_xray_restarts(
+        checked, sampled, xray, now, payload_records=download_reports)
     checked = apply_restart_quality(checked, restart_results)
     previous = load_previous(os.environ.get("PREVIOUS_FEED_URL", ""), now)
     packed = pack_feed(checked, previous, now)
@@ -663,6 +764,8 @@ def main():
     (output_dir / "candidates.json").write_bytes(
         pack_public_candidates(checked, sampled, now, previous_candidates, restart_results))
     (output_dir / "restarts.json").write_bytes(pack_xray_restarts(restart_results, now))
+    (output_dir / "payload.json").write_bytes(pack_payload_probes(download_reports, now))
+    print(f"payload_probes={len(download_reports)} payload_ok={sum(row['payload_ok'] for row in download_reports)}")
     print(f"xray_restart_checks={len(restart_results)} restart_success={sum(r['restart_ok'] for r in restart_results)}")
 
     (output_dir / ".nojekyll").write_text("", encoding="utf-8")

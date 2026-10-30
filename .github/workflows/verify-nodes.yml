@@ -99,12 +99,25 @@ jobs:
           assert all(set(r) == {"fingerprint", "source_id", "restart_ok", "restart_https_latency_ms", "checked_at"} for r in obj["results"])
           assert Path("published/restarts.json").stat().st_size <= 8192
           PY
+          python - <<'PY'
+          from pathlib import Path
+          import json
+          p = Path("published/payload.json")
+          r = json.loads(p.read_text(encoding="utf-8"))
+          assert r["schema"] == 1 and r["kind"] == "xray_https_download"
+          assert r["android_tun_tested"] is False and r["megafon_tested"] is False
+          assert r["upload_speed_tested"] is False
+          assert isinstance(r["results"], list) and len(r["results"]) <= 3
+          assert all(set(x) == {"fingerprint","source_id","payload_ok","download_bytes","download_ms","checked_at"} for x in r["results"])
+          assert p.stat().st_size <= 8192
+          PY
+          cp published/payload.json ./payload.json
           cp published/restarts.json ./restarts.json
           cp published/candidates.json ./candidates.json
           cp published/feed.json ./feed.json
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add feed.json candidates.json restarts.json
+          git add feed.json candidates.json restarts.json payload.json
           if ! git diff --cached --quiet; then
             git commit -m "Update verified public feed"
             git push origin HEAD:main

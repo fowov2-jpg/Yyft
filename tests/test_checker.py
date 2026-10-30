@@ -273,6 +273,59 @@ class ContractTest(unittest.TestCase):
             "fingerprint", "source_id", "uri", "https_latency_ms", "youtube_page_ok", "checked_at"
         })
 
+    def test_real_response_body_diagnostics_do_not_claim_megafon(self):
+        a = LINKS[0].split("#")[0]
+        fp = checker.fingerprint(a)
+        items = [{"fingerprint":fp,"source_id":"avia","raw":a}]
+        checked = [{"fingerprint":fp,"source_id":"avia","https_ok":True,
+                    "https_latency_ms":100}]
+        samples = []
+        def simulated(item, xray):
+            return {"https_ok":True,"https_latency_ms":133,
+                    "payload_ok":True,"download_bytes":2048,"download_ms":98}
+        result = checker.check_xray_restarts(checked,items,"/bin/xray",NOW,
+                                              probe=simulated,payload_records=samples)
+        self.assertTrue(result[0]["restart_ok"])
+        report = json.loads(checker.pack_payload_probes(samples,NOW))
+        self.assertEqual(report["kind"],"xray_https_download")
+        self.assertEqual(report["results"][0]["download_bytes"],2048)
+        for marker in ("megafon_tested","android_tun_tested","upload_speed_tested"):
+            self.assertIs(report[marker],False)
+        self.assertNotIn("raw",report["results"][0])
+        self.assertNotIn("uri",report["results"][0])
+
+    def test_payload_diagnostics_reject_forgery_and_small_responses(self):
+        good = {"fingerprint":"b"*64,"source_id":"avia","payload_ok":True,
+                "download_bytes":1024,"download_ms":150,"checked_at":checker.iso(NOW)}
+        for mutation in ({"fingerprint":"z"*64},{"source_id":"vk.com"},
+                         {"download_bytes":511},{"download_bytes":8193},
+                         {"download_ms":None},{"uri":LINKS[0]},
+                         {"checked_at":checker.iso(NOW-timedelta(seconds=1))}):
+            with self.assertRaises(ValueError):
+                checker.pack_payload_probes([{**good,**mutation}],NOW)
+        checked = [{"fingerprint":good["fingerprint"],"source_id":"avia",
+                    "https_ok":True,"https_latency_ms":80}]
+        sample = [{"fingerprint":good["fingerprint"],"source_id":"avia","raw":LINKS[0]}]
+        for bad in ({"payload_ok":True,"download_bytes":10,"download_ms":15},
+                    {"payload_ok":True,"download_bytes":2048,"download_ms":-1},
+                    {"payload_ok":False,"download_bytes":2048,"download_ms":12}):
+            observed = []
+            checker.check_xray_restarts(checked,sample,"xray",NOW,
+                probe=lambda item, binary: {"https_ok":True,"https_latency_ms":45,**bad},
+                payload_records=observed)
+            self.assertFalse(observed[0]["payload_ok"])
+            self.assertEqual(observed[0]["download_bytes"],0)
+        self.assertEqual(json.loads(checker.pack_payload_probes([],NOW))["results"],[])
+
+    def test_body_probe_uses_certificate_checking_and_public_fixed_host(self):
+        import inspect
+        src = inspect.getsource(checker.probe_https_body)
+        self.assertIn("ssl.create_default_context()",src)
+        self.assertIn("wrap_socket(sock, server_hostname=hostname)",src)
+        self.assertIn("www.google.com",src)
+        self.assertNotIn("vk.com",src)
+        self.assertNotIn("allowInsecure",src)
+
     def test_feed_no_secrets_and_bounded(self):
         node = {'fingerprint':'b'*64,'source_id':'3inker','https_ok':True,'youtube_page_ok':True,'https_latency_ms':200}
         result = checker.pack_feed([node],{},NOW)

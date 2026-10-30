@@ -63,6 +63,9 @@ fun ManualPayloadLabScreen(onBack: () -> Unit) {
     val clipboard = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
     val encoding = remember(template) { ManualPayloadCodec.encode(template) }
+    val warning = remember(gateway, port, useTls) {
+        ManualPayloadCodec.configurationWarning(gateway, port, useTls)
+    }
 
     Column(Modifier.fillMaxSize().background(ScBackground)) {
         ScreenTopBar("HTTP Payload · вручную", onBack = onBack)
@@ -88,6 +91,11 @@ fun ManualPayloadLabScreen(onBack: () -> Unit) {
                 }
             }
             item {
+                OutlinedButton(onClick = {
+                    template = ManualPayloadCodec.WEBSITE_TEMPLATE
+                }) { Text("Проверка сайта (GET), не VPN") }
+            }
+            item {
                 OutlinedTextField(
                     value = gateway, onValueChange = { gateway = it.take(253) },
                     label = { Text("Адрес своего / разрешённого HTTP-шлюза") },
@@ -100,6 +108,11 @@ fun ManualPayloadLabScreen(onBack: () -> Unit) {
                     label = { Text("Порт шлюза") }, singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
+            }
+            item {
+                if (warning != null) {
+                    Text("Внимание: $warning", color = ScTextSecondary)
+                }
             }
             item {
                 OutlinedTextField(

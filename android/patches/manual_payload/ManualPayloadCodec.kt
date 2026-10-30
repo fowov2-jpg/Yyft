@@ -57,6 +57,36 @@ internal object ManualPayloadCodec {
         return Encoding(bytes, wire.replace("\r\n", "⏎\n"), null)
     }
 
+    /** Advisory only: custom gateways can deliberately run TLS on port 80. */
+    fun configurationWarning(gateway: String, portText: String, tls: Boolean): String? {
+        val port = portText.toIntOrNull()
+        if (tls && port == 80)
+            return "TLS включён на порту 80. Обычно это обычный HTTP, поэтому возможен SSLException. Для сравнения: RAW на 80 или TLS на 443."
+        if (!tls && port == 443)
+            return "Порт 443 обычно использует TLS. RAW на нём может не получить HTTP-ответ."
+        if (gateway.trim().equals("vk.com", ignoreCase = true) ||
+            gateway.trim().equals("www.vk.com", ignoreCase = true))
+            return "vk.com — веб-сайт, а не наш HTTP CONNECT-прокси. Его ответ не создаёт VPN-выход в Германию."
+        return null
+    }
+
+    /** Stage-aware error summary; intentionally does not expose exception messages. */
+    fun failureSummary(
+        network: String, stage: String, exceptionName: String,
+        tls: Boolean, port: Int
+    ): String {
+        val hint = when {
+            stage == "TLS" && tls && port == 80 ->
+                "TLS-рукопожатие на порту 80 не удалось. Вероятно, там работает обычный HTTP. Попробуй RAW на 80 либо TLS на 443."
+            stage == "TLS" -> "TLS-рукопожатие не удалось. Проверь порт, сертификат и поддержку TLS у шлюза."
+            stage == "DNS" -> "Не удалось определить адрес шлюза в выбранной сети."
+            stage == "TCP" -> "Не удалось открыть TCP-соединение до шлюза."
+            stage == "HTTP" -> "Соединение открылось, но HTTP-обмен не завершился."
+            else -> "Причина соединения не установлена."
+        }
+        return "$network · этап $stage · $exceptionName. $hint VPN не менялся."
+    }
+
     fun responseCategory(line: String?): String = when {
         line == null -> "HTTP-ответ не получен. VPN не подтверждён."
         Regex("^HTTP/1\\.[01] 2\\d\\d( |$)").containsMatchIn(line) ->

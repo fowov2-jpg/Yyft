@@ -1,0 +1,38 @@
+name: Export SecureConnect source (Vipineshka branch)
+on:
+  workflow_dispatch:
+  push:
+    branches: ['feature/vipineshka-russia-one-tap-20261030']
+    paths:
+      - '.github/workflows/export-secureconnect-source.yml'
+permissions:
+  contents: read
+jobs:
+  export-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate public source ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile
+          p = Path('android/source.zip')
+          assert p.is_file() and p.stat().st_size > 100_000
+          with ZipFile(p) as z:
+              names = z.namelist()
+              assert any(x.endswith('app/src/main/AndroidManifest.xml') for x in names)
+              assert any(x.endswith('vpn/XrayVpnService.kt') for x in names)
+              assert all(not x.startswith('/') and '..' not in Path(x).parts for x in names)
+              assert z.testzip() is None
+              print('Source entries:', len(names))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SecureConnect-source-for-redesign
+          path: android/source.zip
+          if-no-files-found: error
+          retention-days: 1

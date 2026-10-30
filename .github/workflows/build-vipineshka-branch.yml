@@ -91,6 +91,9 @@ jobs:
           set -euo pipefail
           cp android/ci-tests/SessionTimerPolicyTest.kt android/build-input/SecureConnect-2.4.7/app/src/test/java/com/secureconnect/app/SessionTimerPolicyTest.kt
 
+      - name: Apply Vipineshka brand palette on real VPN UI
+        run: python android/patches/apply_brand_palette.py android/build-input/SecureConnect-2.4.7
+
       - name: Add zero-pool evidence diagnostics (no automatic qualification)
         run: python android/patches/apply_pool_diagnostics.py android/build-input/SecureConnect-2.4.7
 

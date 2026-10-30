@@ -216,4 +216,15 @@ replace(home_screen,
 shutil.copyfile(here / "SessionCountdown.kt",
                 main / "ui/screens/home/SessionCountdown.kt")
 
-print("SecureConnect session timer installed and expiry checks enabled")
+# Read-only on-device cellular diagnostics: an explicit opt-in.
+shutil.copyfile(here / "CarrierProbePolicy.kt",
+                main / "ui/screens/settings/CarrierProbePolicy.kt")
+shutil.copyfile(here / "CarrierNetworkDiagnosticsCard.kt",
+                main / "ui/screens/settings/CarrierNetworkDiagnosticsCard.kt")
+replace(settings,
+    '            item { NativeSectionTitle("Безопасность и маршруты") }',
+    '''            item { NativeSectionTitle("Диагностика мобильной сети") }
+            item { CarrierNetworkDiagnosticsCard() }
+            item { NativeSectionTitle("Безопасность и маршруты") }''')
+
+print("SecureConnect session timer and carrier diagnostics installed")

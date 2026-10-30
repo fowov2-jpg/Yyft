@@ -84,6 +84,19 @@ def run(root: Path, workflow: Path) -> dict:
             "stopLiveForTaskRemoval()" in run_ctrl)
     home = (main / "ui/screens/home/HomeScreen.kt").read_text(encoding="utf-8")
     countdown = (main / "ui/screens/home/SessionCountdown.kt").read_text(encoding="utf-8")
+    carrier = (main / "ui/screens/settings/CarrierNetworkDiagnosticsCard.kt").read_text(encoding="utf-8")
+    carrier_policy = (main / "ui/screens/settings/CarrierProbePolicy.kt").read_text(encoding="utf-8")
+    carrier_settings = (main / "ui/screens/settings/PremiumScreens.kt").read_text(encoding="utf-8")
+    require("carrier_diagnostics_opt_in_read_only_underlying_mobile",
+            "CarrierNetworkDiagnosticsCard()" in carrier_settings and
+            "TRANSPORT_CELLULAR" in carrier and "Network.openConnection" in carrier and
+            "network.openConnection(URL(url))" in carrier and
+            "instanceFollowRedirects = false" in carrier and
+            "HttpsURLConnection" in carrier and
+            "rememberCoroutineScope()" in carrier and
+            "Ничего не отправляется в наш GitHub" in carrier and
+            "Нельзя утверждать" in carrier_policy and
+            "https://vk.com/" in carrier)
     require("home_countdown_uses_persisted_deadline_foreground_only",
             "SessionCountdown()" in home and
             "SessionTimer.remainingMs(context)" in countdown and

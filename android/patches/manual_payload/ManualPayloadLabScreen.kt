@@ -205,10 +205,23 @@ fun ManualPayloadLabScreen(onBack: () -> Unit) {
                 }) { Text("Скопировать профиль и результат") }
             }
             item {
+                AutoPayloadGeneratorPanel(
+                    gateway = gateway,
+                    port = port,
+                    cellular = useCellular,
+                    tls = useTls,
+                    onFound = { confirmedTemplate ->
+                        template = confirmedTemplate
+                        result = "Шаблон подтверждён для HTTP CONNECT и сохранён. " +
+                            "Это не подтверждает Xray VPN или выходной IP Германии."
+                    }
+                )
+            }
+            item {
                 Text("Проверка выполняется с телефона через выбранную физическую сеть, " +
                     "но не через Xray. В режиме RAW заголовки видны оператору. " +
                     "Не вставляй пароли, токены и секретные ссылки. " +
-                    "Нет сканирования, автоматического перебора или нагрузочного теста.",
+                    "Автогенератор работает только после явного нажатия, не в фоне, и прекращает попытки при нагреве, STOP или после 24 вариантов.",
                     color = ScTextSecondary)
             }
         }

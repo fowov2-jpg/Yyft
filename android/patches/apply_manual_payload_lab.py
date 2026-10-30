@@ -15,7 +15,8 @@ repo = Path(__file__).resolve().parent / "manual_payload"
 base = root / "app/src/main/java/com/secureconnect/app"
 testbase = root / "app/src/test/java/com/secureconnect/app/vpn"
 
-for name in ("ManualPayloadCodec.kt", "ManualPayloadGatewayProbe.kt"):
+for name in ("ManualPayloadCodec.kt", "ManualPayloadGatewayProbe.kt",
+             "AutoPayloadGenerator.kt", "AutoPayloadGatewayProbe.kt"):
     target = base / "vpn" / name
     if target.exists() and target.read_bytes() != (repo/name).read_bytes():
         raise SystemExit(f"Conflicting source: {target}")
@@ -28,8 +29,14 @@ if target.exists() and target.read_bytes() != (repo/"ManualPayloadLabScreen.kt")
     raise SystemExit(f"Conflicting screen: {target}")
 shutil.copyfile(repo/"ManualPayloadLabScreen.kt", target)
 
+auto_screen = base / "ui/screens/settings/AutoPayloadGeneratorPanel.kt"
+if auto_screen.exists() and auto_screen.read_bytes() != (repo/"AutoPayloadGeneratorPanel.kt").read_bytes():
+    raise SystemExit(f"Conflicting auto-generator screen: {auto_screen}")
+shutil.copyfile(repo/"AutoPayloadGeneratorPanel.kt", auto_screen)
+
 testbase.mkdir(parents=True, exist_ok=True)
 shutil.copyfile(repo/"ManualPayloadCodecTest.kt", testbase/"ManualPayloadCodecTest.kt")
+shutil.copyfile(repo/"AutoPayloadGeneratorTest.kt", testbase/"AutoPayloadGeneratorTest.kt")
 
 def patch(path, before, after):
     text = path.read_text(encoding="utf-8")
@@ -79,4 +86,4 @@ patch(settings,
     '                }\n'
     '            }\n'
     '            item { NativeSectionTitle("Бесплатный рейтинг GitHub") }')
-print("Manual HTTP payload lab installed in existing app; no Xray changes")
+print("Manual HTTP payload lab + bounded combination search installed; no Xray changes")

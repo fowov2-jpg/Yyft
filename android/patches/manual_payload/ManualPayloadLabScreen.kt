@@ -35,6 +35,7 @@ import com.secureconnect.app.ui.theme.ScTextPrimary
 import com.secureconnect.app.ui.theme.ScTextSecondary
 import com.secureconnect.app.vpn.ManualPayloadCodec
 import com.secureconnect.app.vpn.ManualPayloadGatewayProbe
+import com.secureconnect.app.viewmodel.MainViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -44,7 +45,7 @@ import kotlinx.coroutines.withContext
  * Deliberately NOT an Xray outbound: raw HTTP-BUG is not Xray's VLESS transport.
  */
 @Composable
-fun ManualPayloadLabScreen(onBack: () -> Unit) {
+fun ManualPayloadLabScreen(vm: MainViewModel, onBack: () -> Unit) {
     val context = LocalContext.current
     val prefs = remember(context) {
         context.getSharedPreferences("manual_payload_lab_v1", Context.MODE_PRIVATE)
@@ -74,6 +75,7 @@ fun ManualPayloadLabScreen(onBack: () -> Unit) {
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            item { AutomaticXrayPanel(vm) }
             item {
                 Text("Ручной тест HTTP-запроса к указанному тобой шлюзу.",
                     color = ScTextPrimary)

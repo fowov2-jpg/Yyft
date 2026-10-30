@@ -479,7 +479,8 @@ def pack_feed(checked, previous, now):
         raise ValueError("feed exceeded 256 KiB")
     return output
 
-def pack_public_candidates(checked, sampled, now, previous=None, restart_results=None):
+def pack_public_candidates(checked, sampled, now, previous=None, restart_results=None,
+                           download_results=None, upload_results=None):
     """Publish public, freshly Xray-verified URIs using Android's existing schema.
 
     Previous candidates survive only their original short TTL. Successfully
@@ -537,8 +538,17 @@ def pack_public_candidates(checked, sampled, now, previous=None, restart_results
                 known.add(fp)
     confirmed = {r["fingerprint"] for r in (restart_results or [])
                  if r.get("restart_ok") is True}
-    entries.sort(key=lambda r: (r["fingerprint"] not in confirmed,
-                                not r["youtube_page_ok"], r["https_latency_ms"], r["source_id"]))
+    downloaded = {r["fingerprint"] for r in (download_results or [])
+                  if r.get("payload_ok") is True}
+    uploaded = {r["fingerprint"] for r in (upload_results or [])
+                if r.get("upload_ok") is True}
+    both_directions = confirmed & downloaded & uploaded
+    # Only a real, independently restarted Xray connection plus confirmed
+    # download AND upload earns top priority. This is not carrier throughput.
+    entries.sort(key=lambda r: (
+        r["fingerprint"] not in both_directions,
+        r["fingerprint"] not in confirmed,
+        not r["youtube_page_ok"], r["https_latency_ms"], r["source_id"]))
     entries = entries[:MAX_PUBLIC_CANDIDATES]
     payload = json.dumps({"schema": 1, "checker": "xray-github-actions",
         "generated_at": iso(now), "valid_until": iso(now + timedelta(hours=2)),
@@ -867,7 +877,8 @@ def main():
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / "feed.json").write_bytes(packed)
     (output_dir / "candidates.json").write_bytes(
-        pack_public_candidates(checked, sampled, now, previous_candidates, restart_results))
+        pack_public_candidates(checked, sampled, now, previous_candidates,
+                               restart_results, download_reports, upload_reports))
     (output_dir / "restarts.json").write_bytes(pack_xray_restarts(restart_results, now))
     (output_dir / "payload.json").write_bytes(pack_payload_probes(download_reports, now))
     (output_dir / "upload.json").write_bytes(pack_upload_probes(upload_reports, now))

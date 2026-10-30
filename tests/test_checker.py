@@ -380,6 +380,33 @@ class ContractTest(unittest.TestCase):
         self.assertNotIn("vk.com", source)
         self.assertNotIn("allowInsecure", source)
 
+    def test_uploaded_and_downloaded_restart_routes_rank_first_without_changing_feed(self):
+        a, b, cc = [x.split("#")[0] for x in LINKS[:3]]
+        raw = [(a,"avia"),(b,"hamed"),(cc,"radikal")]
+        sampled = [{"fingerprint":checker.fingerprint(uri),"source_id":src,"raw":uri}
+                   for uri,src in raw]
+        checked = [{"fingerprint":row["fingerprint"],"source_id":row["source_id"],
+                    "https_ok":True,"youtube_page_ok":True,"https_latency_ms":20+100*i}
+                   for i,row in enumerate(sampled)]
+        restarts = [{"fingerprint":row["fingerprint"],"restart_ok":True}
+                    for row in sampled]
+        download = [{"fingerprint":sampled[2]["fingerprint"],"payload_ok":True}]
+        upload = [{"fingerprint":sampled[2]["fingerprint"],"upload_ok":True}]
+        doc = json.loads(checker.pack_public_candidates(
+            checked,sampled,NOW,None,restarts,download,upload))
+        self.assertEqual(len(doc["candidates"]),3)
+        self.assertEqual(doc["candidates"][0]["fingerprint"],sampled[2]["fingerprint"])
+        self.assertEqual(set(doc["candidates"][0]),{
+            "fingerprint","source_id","uri","https_latency_ms","youtube_page_ok","checked_at"})
+        # A mere successful POST without a verified download or restart is NOT enough.
+        doc_without_restart = json.loads(checker.pack_public_candidates(
+            checked,sampled,NOW,None,
+            [{"fingerprint":sampled[0]["fingerprint"],"restart_ok":True}],
+            download,upload))
+        self.assertEqual(doc_without_restart["candidates"][0]["fingerprint"],
+                         sampled[0]["fingerprint"])
+        self.assertNotIn("upload_ok",doc_without_restart["candidates"][0])
+
     def test_feed_no_secrets_and_bounded(self):
         node = {'fingerprint':'b'*64,'source_id':'3inker','https_ok':True,'youtube_page_ok':True,'https_latency_ms':200}
         result = checker.pack_feed([node],{},NOW)

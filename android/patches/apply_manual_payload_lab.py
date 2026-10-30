@@ -16,7 +16,8 @@ base = root / "app/src/main/java/com/secureconnect/app"
 testbase = root / "app/src/test/java/com/secureconnect/app/vpn"
 
 for name in ("ManualPayloadCodec.kt", "ManualPayloadGatewayProbe.kt",
-             "AutoPayloadGenerator.kt", "AutoPayloadGatewayProbe.kt"):
+             "AutoPayloadGenerator.kt", "AutoPayloadGatewayProbe.kt",
+             "AutomaticRoutePolicy.kt"):
     target = base / "vpn" / name
     if target.exists() and target.read_bytes() != (repo/name).read_bytes():
         raise SystemExit(f"Conflicting source: {target}")
@@ -34,9 +35,15 @@ if auto_screen.exists() and auto_screen.read_bytes() != (repo/"AutoPayloadGenera
     raise SystemExit(f"Conflicting auto-generator screen: {auto_screen}")
 shutil.copyfile(repo/"AutoPayloadGeneratorPanel.kt", auto_screen)
 
+route_screen = base / "ui/screens/settings/AutomaticXrayPanel.kt"
+if route_screen.exists() and route_screen.read_bytes() != (repo/"AutomaticXrayPanel.kt").read_bytes():
+    raise SystemExit(f"Conflicting gatewayless screen: {route_screen}")
+shutil.copyfile(repo/"AutomaticXrayPanel.kt", route_screen)
+
 testbase.mkdir(parents=True, exist_ok=True)
 shutil.copyfile(repo/"ManualPayloadCodecTest.kt", testbase/"ManualPayloadCodecTest.kt")
 shutil.copyfile(repo/"AutoPayloadGeneratorTest.kt", testbase/"AutoPayloadGeneratorTest.kt")
+shutil.copyfile(repo/"AutomaticRoutePolicyTest.kt", testbase/"AutomaticRoutePolicyTest.kt")
 
 def patch(path, before, after):
     text = path.read_text(encoding="utf-8")
@@ -51,6 +58,9 @@ patch(navigation,
     "import com.secureconnect.app.ui.screens.settings.PremiumSettingsScreen\n",
     "import com.secureconnect.app.ui.screens.settings.PremiumSettingsScreen\n"
     "import com.secureconnect.app.ui.screens.settings.ManualPayloadLabScreen\n")
+patch(navigation,
+    "ManualPayloadLabScreen(onBack = { nav.popBackStack() })",
+    "ManualPayloadLabScreen(vm = vm, onBack = { nav.popBackStack() })")
 patch(navigation,
     "PremiumSettingsScreen(vm, onBack = { nav.popBackStack() })",
     "PremiumSettingsScreen(vm, onBack = { nav.popBackStack() },\n"
@@ -86,4 +96,4 @@ patch(settings,
     '                }\n'
     '            }\n'
     '            item { NativeSectionTitle("Бесплатный рейтинг GitHub") }')
-print("Manual HTTP payload lab + bounded combination search installed; no Xray changes")
+print("Manual payload search + gatewayless Xray autopilot integrated; no extra background probing")

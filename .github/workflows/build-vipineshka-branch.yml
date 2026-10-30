@@ -17,7 +17,7 @@ permissions:
 
 concurrency:
   group: vipineshka-branch-android-apk
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -90,6 +90,9 @@ jobs:
         run: |
           set -euo pipefail
           cp android/ci-tests/SessionTimerPolicyTest.kt android/build-input/SecureConnect-2.4.7/app/src/test/java/com/secureconnect/app/SessionTimerPolicyTest.kt
+
+      - name: Add zero-pool evidence diagnostics (no automatic qualification)
+        run: python android/patches/apply_pool_diagnostics.py android/build-input/SecureConnect-2.4.7
 
       - name: Install carrier diagnostics policy unit tests
         shell: bash

@@ -102,7 +102,14 @@ def run(root: Path, workflow: Path) -> dict:
             "не подтверждают блокировку МегаФоном" in carrier_policy and
             "Оператор SIM не определяется автоматически" in carrier and
             "withTimeoutOrNull(35_000L)" in carrier and
-            "connection = network.openConnection(URL(url))" in carrier and
+            "network.openConnection(URL(url))" in carrier and
+            "URL(url).openConnection()" in carrier and
+            "NET_CAPABILITY_VALIDATED" in carrier and
+            "manager.activeNetwork" in carrier and
+            "transport != \"мобильная\"" in carrier and
+            "CarrierProbePolicy.routeComparison" in carrier and
+            "UnknownHostException" in carrier and
+            "ConnectException" in carrier and
             "Ничего не отправляется в наш GitHub" in carrier and
             "Нельзя утверждать" in carrier_policy and
             "https://vk.com/" in carrier)

@@ -4,6 +4,32 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CarrierProbePolicyTest {
+    @Test fun mobileValidationStatusDoesNotMeanMegafonWhitelist() {
+        val s = CarrierProbePolicy.mobileNetworkSummary(false, true)
+        assertTrue(s.contains("INTERNET=да"))
+        assertTrue(s.contains("VALIDATED=нет"))
+        assertTrue(s.contains("не доказывает блокировку"))
+    }
+
+    @Test fun defaultVpnAndWifiDoNotTriggerMisleadingMobileTests() {
+        assertTrue(CarrierProbePolicy.unusableDefault("VPN").contains(
+            "не запускался"))
+        assertTrue(CarrierProbePolicy.unusableDefault("Wi-Fi").contains(
+            "по умолчанию"))
+    }
+
+    @Test fun defaultRouteControlPreventsFalseCarrierAttribution() {
+        val explicitBroken = CarrierProbePolicy.routeComparison(false, true)
+        assertTrue(explicitBroken.contains("системному маршруту отвечает"))
+        assertTrue(explicitBroken.contains("не доказательство"))
+        val bothBroken = CarrierProbePolicy.routeComparison(false, false)
+        assertTrue(bothBroken.contains("Android, DNS, сети"))
+        assertTrue(bothBroken.contains("не подтверждена"))
+        assertTrue(CarrierProbePolicy.routeComparison(true, true)
+            .contains("не доказывает"))
+    }
+
+
     @Test fun activeVpnDoesNotClaimThatMegafonBlockedAllFourSites() {
         val notice = CarrierProbePolicy.vpnActiveNotice()
         assertTrue(notice.contains("не запускалась"))

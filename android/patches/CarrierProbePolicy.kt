@@ -15,6 +15,33 @@ internal object CarrierProbePolicy {
             "VPN и Kill Switch не изменены. Нельзя утверждать, что МегаФон " +
             "относит VPN-трафик к белому списку VK или увеличивает скорость."
 
+    /** Selected cellular network does not by itself imply mobile Internet works. */
+    fun mobileNetworkSummary(validated: Boolean, internetCapability: Boolean): String =
+        "Android: мобильная сеть обнаружена; INTERNET=" +
+            (if (internetCapability) "да" else "нет") +
+            ", VALIDATED=" + (if (validated) "да" else "нет") +
+            ". Отсутствие VALIDATED не доказывает блокировку сайтов оператором."
+
+    fun unusableDefault(transport: String): String =
+        "Тест через SIM не запускался: сеть приложения по умолчанию — " +
+            transport + ". Для сравнения нужна именно мобильная сеть " +
+            "по умолчанию без активного VPN. Защита и настройки не изменены."
+
+    fun routeComparison(cellularControl: Boolean, defaultControl: Boolean): String =
+        when {
+            defaultControl && !cellularControl ->
+                "Контрольный HTTPS по системному маршруту отвечает, а при явной " +
+                    "привязке к мобильной сети нет: возможна ошибка выбора сети " +
+                    "или ограничения Android. Это не доказательство блока МегаФоном."
+            !defaultControl && !cellularControl ->
+                "Контрольный HTTPS не ответил ни по системному, ни по выбранному " +
+                    "мобильному маршруту. Причина может быть в Android, DNS, сети " +
+                    "или операторе; блокировка МегаФоном не подтверждена."
+            else ->
+                "Сравнение маршрутов выполнено. Доступность HTTPS не доказывает, " +
+                    "что VPN классифицируется оператором как VK."
+        }
+
     fun progress(index: Int, total: Int, label: String, completed: List<String>): String =
         "Проверка " + index + "/" + total + ": " + label + "\n" +
             completed.joinToString("\n")

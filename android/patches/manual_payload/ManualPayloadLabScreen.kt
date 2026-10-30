@@ -113,6 +113,13 @@ fun ManualPayloadLabScreen(onBack: () -> Unit) {
                 )
             }
             item {
+                if (encoding.valid) {
+                    Text("Предпросмотр передаваемого HTTP-запроса:",
+                        color = ScTextPrimary)
+                    Text(encoding.preview.take(1000), color = ScTextSecondary)
+                }
+            }
+            item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("TLS до шлюза (проверка сертификата)", color = ScTextPrimary,
                         modifier = Modifier.weight(1f))

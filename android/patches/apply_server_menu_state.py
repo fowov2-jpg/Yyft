@@ -64,9 +64,9 @@ swap(vm,'    fun diagnosticReport(): String = VpnDiagnosticReporter.render(',
 swap(vm,'            logs = _logs.value.toList()\n        )\n    )\n\n    init {',
 '''            logs = _logs.value.toList()
         )
-    ) + "\nOne-tap button event: $lastOneTapTime" +
-        "\nServers menu opened: $lastServersOpenTime" +
-        "\nNote: opening Servers does not trigger Xray or server scans.\n"
+    ) + "\\nOne-tap button event: $lastOneTapTime" +
+        "\\nServers menu opened: $lastServersOpenTime" +
+        "\\nNote: opening Servers does not trigger Xray or server scans.\\n"
 
     init {''')
 swap(vm,'    fun selectAutoServer() {\n        setConnectionMode(ConnectionMode.AUTO)',

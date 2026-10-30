@@ -326,12 +326,62 @@ def probe_https_body(port, hostname="www.google.com", path="/robots.txt",
     raise OSError("incomplete HTTPS response body")
 
 
+def probe_https_upload(port, timeout=7):
+    """Verify a bounded outbound POST by checking the remote HTTPS echo.
+
+    Requires a real TLS-valid POST response containing every transmitted byte;
+    no credentials or user data is sent. This is NOT a throughput measurement.
+    An unavailable public diagnostic endpoint does not invalidate basic VPN.
+    """
+    hostname, path = "postman-echo.com", "/post"
+    payload = b"SC-UPLOAD-PROBE-V1-" + b"x" * 1024
+    started = time.monotonic()
+    with socket.create_connection(("127.0.0.1", port), timeout=timeout) as sock:
+        sock.settimeout(timeout)
+        sock.sendall(b"\x05\x01\x00")
+        if exact(sock, 2) != b"\x05\x00":
+            raise OSError("SOCKS auth failed")
+        name = hostname.encode("ascii")
+        sock.sendall(b"\x05\x01\x00\x03" + bytes([len(name)]) + name + (443).to_bytes(2, "big"))
+        reply = exact(sock, 4)
+        if len(reply) != 4 or reply[1] != 0 or reply[3] not in (1, 3, 4):
+            raise OSError("SOCKS upload dial failed")
+        if reply[3] == 1:
+            exact(sock, 4)
+        elif reply[3] == 4:
+            exact(sock, 16)
+        else:
+            exact(sock, exact(sock, 1)[0])
+        exact(sock, 2)
+        with ssl.create_default_context().wrap_socket(sock, server_hostname=hostname) as tls:
+            tls.settimeout(timeout)
+            header = (f"POST {path} HTTP/1.1\r\nHost: {hostname}\r\n"
+                      "Content-Type: text/plain\r\nAccept-Encoding: identity\r\n"
+                      f"Content-Length: {len(payload)}\r\nConnection: close\r\n"
+                      "User-Agent: SecureConnect-Checker/1\r\n\r\n").encode("ascii")
+            tls.sendall(header + payload)
+            response = bytearray()
+            while len(response) < 16384:
+                part = tls.recv(min(2048, 16384 - len(response)))
+                if not part:
+                    break
+                response.extend(part)
+                if b"\r\n\r\n" in response:
+                    header_bytes, body = bytes(response).split(b"\r\n\r\n", 1)
+                    status = header_bytes.split(b"\r\n", 1)[0].split()
+                    if len(status) < 2 or not status[0].startswith(b"HTTP/") or status[1] != b"200":
+                        raise OSError("unexpected upload endpoint status")
+                    if payload in body:
+                        return len(payload), int((time.monotonic()-started)*1000)
+    raise OSError("remote server did not echo full uploaded payload")
+
+
 def reserve_port():
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
         return s.getsockname()[1]
 
-def test_candidate(item, xray, check_payload=False):
+def test_candidate(item, xray, check_payload=False, check_upload=False):
     result = {"fingerprint": item["fingerprint"], "source_id": item["source_id"], "https_ok": False, "youtube_page_ok": False, "https_latency_ms": None}
     try:
         outbound = outbound_from_uri(item["raw"])
@@ -360,6 +410,13 @@ def test_candidate(item, xray, check_payload=False):
                             try:
                                 n, duration = probe_https_body(port)
                                 result.update(payload_ok=True, download_bytes=n, download_ms=duration)
+                            except (OSError, ValueError, ssl.SSLError):
+                                pass
+                        if check_upload:
+                            result.update(upload_ok=False, upload_bytes=0, upload_ms=None)
+                            try:
+                                n, upload_duration = probe_https_upload(port)
+                                result.update(upload_ok=True, upload_bytes=n, upload_ms=upload_duration)
                             except (OSError, ValueError, ssl.SSLError):
                                 pass
                         try:
@@ -612,7 +669,7 @@ def apply_restart_quality(checked, restarts):
     ]
 
 
-def check_xray_restarts(checked, sampled, xray, now, probe=None, payload_records=None):
+def check_xray_restarts(checked, sampled, xray, now, probe=None, payload_records=None, upload_records=None):
     """Re-launch Xray for up to 3 previously passing routes, across sources.
 
     Each test_candidate invocation starts and stops a NEW Xray process with
@@ -621,7 +678,7 @@ def check_xray_restarts(checked, sampled, xray, now, probe=None, payload_records
     No VPN credentials or raw URIs are written to the result.
     """
     if probe is None:
-        probe = lambda item, binary: test_candidate(item, binary, check_payload=True)
+        probe = lambda item, binary: test_candidate(item, binary, check_payload=True, check_upload=True)
     originals = {r["fingerprint"]: r for r in sampled}
     ordered = sorted(
         (r for r in checked if r.get("https_ok") is True and r.get("fingerprint") in originals),
@@ -659,6 +716,16 @@ def check_xray_restarts(checked, sampled, xray, now, probe=None, payload_records
                 "fingerprint": item["fingerprint"], "source_id": item["source_id"],
                 "payload_ok": bool(good), "download_bytes": n if good else 0,
                 "download_ms": delay_ms if good else None, "checked_at": iso(now)
+            })
+        if upload_records is not None:
+            uploaded, upl_ms = retry.get("upload_bytes", 0), retry.get("upload_ms")
+            verified = (ok and retry.get("upload_ok") is True and
+                        type(uploaded) is int and uploaded == 1043 and
+                        type(upl_ms) is int and upl_ms >= 0)
+            upload_records.append({
+                "fingerprint": item["fingerprint"], "source_id": item["source_id"],
+                "upload_ok": bool(verified), "upload_bytes": uploaded if verified else 0,
+                "upload_ms": upl_ms if verified else None, "checked_at": iso(now)
             })
     return records
 
@@ -728,6 +795,42 @@ def pack_payload_probes(records, now):
     return output
 
 
+def pack_upload_probes(records, now):
+    """Independent, bounded upload diagnostic. Never claims mobile-carrier tests."""
+    if len(records) > MAX_RESTART_CHECKS:
+        raise ValueError("too many upload probes")
+    for r in records:
+        if not isinstance(r, dict) or set(r) != {
+            "fingerprint", "source_id", "upload_ok", "upload_bytes",
+            "upload_ms", "checked_at"
+        }:
+            raise ValueError("unexpected upload fields")
+        if not isinstance(r["fingerprint"], str) or not FINGERPRINT_RE.fullmatch(r["fingerprint"]):
+            raise ValueError("bad upload fingerprint")
+        if r["source_id"] not in SOURCES or type(r["upload_ok"]) is not bool:
+            raise ValueError("bad upload source")
+        size, latency = r["upload_bytes"], r["upload_ms"]
+        if type(size) is not int or (latency is not None and type(latency) is not int):
+            raise ValueError("bad upload number")
+        if r["upload_ok"]:
+            if size != 1043 or latency is None or latency < 0:
+                raise ValueError("upload result not verified")
+        elif size != 0 or latency is not None:
+            raise ValueError("failed upload claims bytes")
+        if r["checked_at"] != iso(now):
+            raise ValueError("upload checked_at does not match run")
+    output = json.dumps({
+        "schema": 1, "checker": "xray-github-actions", "kind": "xray_https_upload",
+        "android_tun_tested": False, "megafon_tested": False,
+        "upload_speed_tested": False,
+        "generated_at": iso(now), "valid_until": iso(now+timedelta(hours=2)),
+        "results": records
+    }, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    if len(output) > 8192:
+        raise ValueError("upload report exceeds limit")
+    return output
+
+
 def main():
     now = datetime.now(timezone.utc)
     run_number = int(os.environ.get("GITHUB_RUN_NUMBER", "1"))
@@ -753,8 +856,10 @@ def main():
     # A second independent Xray launch gates the selected top routes BEFORE
     # public output. One failed restart invalidates an earlier positive result.
     download_reports = []
+    upload_reports = []
     restart_results = check_xray_restarts(
-        checked, sampled, xray, now, payload_records=download_reports)
+        checked, sampled, xray, now,
+        payload_records=download_reports, upload_records=upload_reports)
     checked = apply_restart_quality(checked, restart_results)
     previous = load_previous(os.environ.get("PREVIOUS_FEED_URL", ""), now)
     packed = pack_feed(checked, previous, now)
@@ -765,6 +870,8 @@ def main():
         pack_public_candidates(checked, sampled, now, previous_candidates, restart_results))
     (output_dir / "restarts.json").write_bytes(pack_xray_restarts(restart_results, now))
     (output_dir / "payload.json").write_bytes(pack_payload_probes(download_reports, now))
+    (output_dir / "upload.json").write_bytes(pack_upload_probes(upload_reports, now))
+    print(f"upload_probes={len(upload_reports)} upload_ok={sum(row['upload_ok'] for row in upload_reports)}")
     print(f"payload_probes={len(download_reports)} payload_ok={sum(row['payload_ok'] for row in download_reports)}")
     print(f"xray_restart_checks={len(restart_results)} restart_success={sum(r['restart_ok'] for r in restart_results)}")
 

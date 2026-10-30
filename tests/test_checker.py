@@ -326,6 +326,60 @@ class ContractTest(unittest.TestCase):
         self.assertNotIn("vk.com",src)
         self.assertNotIn("allowInsecure",src)
 
+    def test_upload_real_echo_contract_and_simulated_fail_closed(self):
+        uri = LINKS[0].split("#")[0]
+        fp = checker.fingerprint(uri)
+        originals = [{"fingerprint": fp, "source_id": "avia", "raw": uri}]
+        checked = [{"fingerprint": fp, "source_id": "avia", "https_ok": True,
+                    "https_latency_ms": 100}]
+        records = []
+        def successful(item, xray):
+            return {"https_ok": True, "https_latency_ms": 110,
+                    "upload_ok": True, "upload_bytes": 1043, "upload_ms": 242}
+        checker.check_xray_restarts(checked, originals, "xray", NOW,
+                                    probe=successful, upload_records=records)
+        report = json.loads(checker.pack_upload_probes(records, NOW))
+        self.assertEqual(report["kind"], "xray_https_upload")
+        self.assertFalse(report["megafon_tested"])
+        self.assertFalse(report["android_tun_tested"])
+        self.assertFalse(report["upload_speed_tested"])
+        self.assertEqual(report["results"][0]["upload_bytes"], 1043)
+        self.assertNotIn("uri", report["results"][0])
+
+        for bad in ({"upload_ok": True, "upload_bytes": 1024, "upload_ms": 20},
+                    {"upload_ok": True, "upload_bytes": 1043, "upload_ms": -1},
+                    {"upload_ok": False, "upload_bytes": 1043, "upload_ms": 20},
+                    {"upload_ok": True, "upload_bytes": 0, "upload_ms": None}):
+            failed = []
+            checker.check_xray_restarts(checked, originals, "xray",
+                NOW, probe=lambda item, binary: {
+                    "https_ok": True, "https_latency_ms": 90, **bad},
+                upload_records=failed)
+            self.assertFalse(failed[0]["upload_ok"])
+            self.assertEqual(failed[0]["upload_bytes"], 0)
+            self.assertIsNone(failed[0]["upload_ms"])
+
+    def test_upload_report_rejects_forged_values(self):
+        row = {"fingerprint": "a"*64, "source_id": "avia", "upload_ok": True,
+               "upload_bytes": 1043, "upload_ms": 101,
+               "checked_at": checker.iso(NOW)}
+        for mutation in ({"source_id": "vk.com"}, {"fingerprint": "z"*64},
+                         {"upload_bytes": 8192}, {"upload_ms": -1},
+                         {"checked_at": checker.iso(NOW-timedelta(seconds=2))},
+                         {"uri": LINKS[0]}):
+            with self.assertRaises(ValueError):
+                checker.pack_upload_probes([{**row, **mutation}], NOW)
+        self.assertEqual(json.loads(checker.pack_upload_probes([], NOW))["results"], [])
+
+    def test_upload_probe_has_tls_certificate_validation_and_exact_echo(self):
+        import inspect
+        source = inspect.getsource(checker.probe_https_upload)
+        self.assertIn("ssl.create_default_context()", source)
+        self.assertIn("payload in body", source)
+        self.assertIn("postman-echo.com", source)
+        self.assertNotIn("vk.com", source)
+        self.assertNotIn("allowInsecure", source)
+
     def test_feed_no_secrets_and_bounded(self):
         node = {'fingerprint':'b'*64,'source_id':'3inker','https_ok':True,'youtube_page_ok':True,'https_latency_ms':200}
         result = checker.pack_feed([node],{},NOW)

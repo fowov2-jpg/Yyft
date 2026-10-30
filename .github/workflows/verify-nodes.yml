@@ -111,13 +111,27 @@ jobs:
           assert all(set(x) == {"fingerprint","source_id","payload_ok","download_bytes","download_ms","checked_at"} for x in r["results"])
           assert p.stat().st_size <= 8192
           PY
+          python - <<'PY'
+          from pathlib import Path
+          import json
+          p = Path("published/upload.json")
+          obj = json.loads(p.read_text(encoding="utf-8"))
+          assert obj["schema"] == 1 and obj["kind"] == "xray_https_upload"
+          assert obj["android_tun_tested"] is False
+          assert obj["megafon_tested"] is False
+          assert obj["upload_speed_tested"] is False
+          assert isinstance(obj["results"], list) and len(obj["results"]) <= 3
+          assert all(set(x) == {"fingerprint","source_id","upload_ok","upload_bytes","upload_ms","checked_at"} for x in obj["results"])
+          assert p.stat().st_size <= 8192
+          PY
+          cp published/upload.json ./upload.json
           cp published/payload.json ./payload.json
           cp published/restarts.json ./restarts.json
           cp published/candidates.json ./candidates.json
           cp published/feed.json ./feed.json
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add feed.json candidates.json restarts.json payload.json
+          git add feed.json candidates.json restarts.json payload.json upload.json
           if ! git diff --cached --quiet; then
             git commit -m "Update verified public feed"
             git push origin HEAD:main

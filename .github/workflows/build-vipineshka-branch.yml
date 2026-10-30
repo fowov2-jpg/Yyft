@@ -103,6 +103,9 @@ jobs:
       - name: Fix server menu misleading zero count and trace one-tap startup
         run: python android/patches/apply_server_menu_state.py android/build-input/SecureConnect-2.4.7
 
+      - name: Restore opt-in auto-connect without polling or requiring verified reserves
+        run: python android/patches/apply_autostart_settings_fix.py android/build-input/SecureConnect-2.4.7
+
       - name: Install carrier diagnostics policy unit tests
         shell: bash
         run: |

@@ -100,6 +100,9 @@ jobs:
       - name: Pause optional scans when Android reports thermal throttling or battery saver
         run: python android/patches/apply_thermal_safety.py android/build-input/SecureConnect-2.4.7
 
+      - name: Fix server menu misleading zero count and trace one-tap startup
+        run: python android/patches/apply_server_menu_state.py android/build-input/SecureConnect-2.4.7
+
       - name: Install carrier diagnostics policy unit tests
         shell: bash
         run: |

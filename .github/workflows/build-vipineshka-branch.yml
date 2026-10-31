@@ -109,6 +109,9 @@ jobs:
       - name: Install manual HTTP Payload editor, one-shot cellular test and JUnit
         run: python android/patches/apply_manual_payload_lab.py android/build-input/SecureConnect-2.4.7
 
+      - name: Remember HTTPS-validated primaries and reuse securely on next Xray connect
+        run: python android/patches/apply_primary_fast_reuse.py android/build-input/SecureConnect-2.4.7
+
       - name: Install carrier diagnostics policy unit tests
         shell: bash
         run: |

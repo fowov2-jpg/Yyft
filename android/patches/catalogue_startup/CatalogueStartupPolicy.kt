@@ -1,7 +1,7 @@
 package com.secureconnect.app.viewmodel
 
 /** UI gate for the first AUTO connection, not a reachability/quality certificate. */
-internal object CatalogueStartupPolicy {
+object CatalogueStartupPolicy {
     enum class Phase { LOADING, READY_CACHE, READY_RECOVERY, ERROR }
 
     data class State(

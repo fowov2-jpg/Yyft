@@ -115,6 +115,29 @@ jobs:
       - name: Persist HTTPS-verified Xray recovery servers in encrypted Android cache
         run: python android/patches/apply_stable_recovery.py android/build-input/SecureConnect-2.4.7
 
+      - name: Reject experimental HTTP payload screens and gateway code from stable APK source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          root = Path("android/build-input/SecureConnect-2.4.7/app/src/main/java/com/secureconnect/app")
+          obsolete = (
+              "ui/screens/settings/ManualPayloadLabScreen.kt",
+              "ui/screens/settings/AutoPayloadGeneratorPanel.kt",
+              "ui/screens/settings/AutomaticXrayPanel.kt",
+              "vpn/ManualPayloadCodec.kt",
+              "vpn/AutoPayloadGenerator.kt",
+              "vpn/AutoPayloadGatewayProbe.kt",
+              "vpn/ManualPayloadGatewayProbe.kt",
+          )
+          assert all(not (root / p).exists() for p in obsolete), "Experimental HTTP generator present"
+          assert "PayloadLab" not in (root / "ui/navigation/AppNavigation.kt").read_text()
+          assert "onPayloadLab" not in (root / "ui/screens/settings/PremiumScreens.kt").read_text()
+          assert (root / "data/local/SuccessfulRouteCache.kt").is_file()
+          print("stable source cleanup: verified")
+          PY
+
       - name: Install carrier diagnostics policy unit tests
         shell: bash
         run: |
@@ -212,7 +235,7 @@ jobs:
           from pathlib import Path
           from zipfile import ZipFile, ZIP_DEFLATED
           root = Path("android/build-input/SecureConnect-2.4.7")
-          output = Path("android/VipineshkaVPN-HTTP-AutoGenerator-source.zip")
+          output = Path("android/VipineshkaVPN-Stable-Recovery-source.zip")
           ignore_dirs = {"build", ".gradle", ".idea", ".git", "captures"}
           ignore_files = {"local.properties", "gradle.properties.local", "google-services.json"}
           ignore_suffixes = (".jks", ".keystore", ".p12", ".pem", ".key")
@@ -231,9 +254,10 @@ jobs:
                   "2. Open the VipineshkaVPN folder in Android Studio.\n"
                   "3. Install Android SDK 36 and JDK 21; let Gradle sync.\n"
                   "4. Assemble app: ./gradlew :app:assembleDebug\n"
-                  "5. The automatic HTTP-payload experiment is in Settings / HTTP Payload.\n"
-                  "6. The test requires an authorized HTTP CONNECT gateway and does not "
-                  "alter Xray/VPN or guarantee whitelist access.\n")
+                  "5. Use the main AUTO button to connect via Xray. No HTTP Payload lab is included.\n"
+                  "6. Up to 12 previously HTTPS-proven routes are stored encrypted; "
+                  "if normal selection fails, up to 3 are rechecked.\n"
+                  "7. Cached routes never bypass fresh TLS/HTTPS verification.\n")
           assert n > 100, n
           print("packaged", n, "integrated source files", output.stat().st_size)
           PY
@@ -242,8 +266,8 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: VipineshkaVPN-HTTP-AutoGenerator-AndroidStudio-source
-          path: android/VipineshkaVPN-HTTP-AutoGenerator-source.zip
+          name: VipineshkaVPN-Stable-Recovery-AndroidStudio-source
+          path: android/VipineshkaVPN-Stable-Recovery-source.zip
           if-no-files-found: error
           retention-days: 7
 

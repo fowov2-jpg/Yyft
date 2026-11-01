@@ -115,6 +115,9 @@ jobs:
       - name: Persist HTTPS-verified Xray recovery servers in encrypted Android cache
         run: python android/patches/apply_stable_recovery.py android/build-input/SecureConnect-2.4.7
 
+      - name: Add catalogue loading screen and block AUTO until compatible configs are ready
+        run: python android/patches/apply_catalogue_startup_gate.py android/build-input/SecureConnect-2.4.7
+
       - name: Reject experimental HTTP payload screens and gateway code from stable APK source
         shell: bash
         run: |

@@ -106,14 +106,14 @@ jobs:
       - name: Restore opt-in auto-connect without polling or requiring verified reserves
         run: python android/patches/apply_autostart_settings_fix.py android/build-input/SecureConnect-2.4.7
 
-      - name: Install manual HTTP Payload editor, one-shot cellular test and JUnit
-        run: python android/patches/apply_manual_payload_lab.py android/build-input/SecureConnect-2.4.7
-
       - name: Remember HTTPS-validated primaries and reuse securely on next Xray connect
         run: python android/patches/apply_primary_fast_reuse.py android/build-input/SecureConnect-2.4.7
 
       - name: Remove redundant Xray bootstrap in AUTO while rejecting untrusted live TLS
         run: python android/patches/apply_direct_https_bootstrap.py android/build-input/SecureConnect-2.4.7
+
+      - name: Persist HTTPS-verified Xray recovery servers in encrypted Android cache
+        run: python android/patches/apply_stable_recovery.py android/build-input/SecureConnect-2.4.7
 
       - name: Install carrier diagnostics policy unit tests
         shell: bash

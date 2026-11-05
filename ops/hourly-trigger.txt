@@ -68,3 +68,5 @@ Fallback requested: 2026-11-04T19:15:03Z — last successful verify/deploy #116 
 Fallback requested: 2026-11-05T00:12:45Z — latest successful verify/deploy #118 at 2026-11-04T22:01:09Z (>70 minutes ago); candidates.json expired at 2026-11-04T23:59:54Z; feed.json valid until 2026-11-05T03:59:54Z; no active verify-nodes runs; previous fallback >60 minutes ago.
 
 Fallback requested: 2026-11-05T02:19:39Z — latest successful verify/deploy #119 at 2026-11-05T00:14:28Z (>70 minutes ago); candidates.json expired at 2026-11-05T02:13:31Z; feed.json valid until 2026-11-05T06:13:31Z; no active verify-nodes runs in latest listing; previous fallback >60 minutes ago.
+
+Fallback requested: 2026-11-05T05:17:48Z — last successful verify/deploy #121 at 2026-11-05T02:38:25Z (>70 minutes ago); candidates.json expired at 2026-11-05T04:37:28Z; feed.json valid until 2026-11-05T08:37:28Z; no active workflow runs in latest listing; previous fallback >60 minutes ago.

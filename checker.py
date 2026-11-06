@@ -51,16 +51,16 @@ ANDROID_RANKING_SOURCE_IDS = frozenset({
     "barry", "solispirit", "ebrasha", "mohammad", "au1rxx",
 })
 assert ANDROID_RANKING_SOURCE_IDS <= SOURCES.keys()
-MAX_PER_RUN = 24
+MAX_PER_RUN = 36
 MAX_RESULTS = 180
-MAX_PUBLIC_CANDIDATES = 24
+MAX_PUBLIC_CANDIDATES = 36
 MAX_PUBLIC_CANDIDATES_BYTES = 128 * 1024
 MAX_SOURCE_BYTES = 1024 * 1024
 MAX_FEED_BYTES = 256 * 1024
 MAX_SOURCE_LINKS = 600
 MAX_WORKERS = 2
 MAX_RESTART_CHECKS = 3  # Extra real Xray launches, bounded per hour
-MAX_RECHECKS = 6  # Re-probe successful public routes; total initial Xray checks remains 24
+MAX_RECHECKS = 6  # Re-probe successful public routes; total initial Xray checks remains 36
 RESULT_TTL = timedelta(hours=8)
 PUBLICATION_TTL = timedelta(hours=6)
 ALLOWED_SCHEMES = {"vless", "vmess", "trojan", "ss"}
@@ -616,7 +616,7 @@ def pick_balanced(collected, run_number, max_items=MAX_PER_RUN):
     return output
 
 def select_probe_batch(collected, run_number, previous_candidates, now):
-    """Spend up to six of 24 slots re-testing previously working public routes.
+    """Spend up to six of 36 slots re-testing previously working public routes.
 
     Only carry forward publicly published, previously Xray-checked URIs with
     valid fingerprints, allowlisted source IDs and unexpired timestamps.

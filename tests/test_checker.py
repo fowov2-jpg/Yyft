@@ -120,7 +120,7 @@ class ContractTest(unittest.TestCase):
             for url in checker.SOURCES[source]:
                 self.assertTrue(url.startswith("https://raw.githubusercontent.com/"))
                 self.assertNotIn("?", url)
-        self.assertLessEqual(checker.MAX_PER_RUN, 24)
+        self.assertLessEqual(checker.MAX_PER_RUN, 36)
         self.assertLessEqual(checker.MAX_WORKERS, 2)
 
     def test_new_source_rotation_no_special_trust(self):

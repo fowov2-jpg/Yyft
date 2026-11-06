@@ -139,7 +139,7 @@ jobs:
   deploy:
     needs: verify
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 15
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}

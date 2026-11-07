@@ -12,3 +12,6 @@ Reason: candidates.json expired at 2026-11-06T18:02:26Z; last successful workflo
 
 Fallback verification trigger: 2026-11-06T20:16:46Z
 Reason: candidates.json expired at 2026-11-06T20:15:38Z; last successful workflow #141 completed 2026-11-06T18:20:14Z (>70 minutes); no active runs in latest listing; previous fallback at 2026-11-06T18:15:08Z (>1 hour).
+
+Fallback verification trigger: 2026-11-07T00:18:10Z
+Reason: candidates.json expired at 2026-11-06T23:39:50Z; last successful workflow #143 completed at 2026-11-06T21:40:50Z (>70 minutes); no active runs in latest listing; previous fallback at 2026-11-06T20:16:46Z (>1 hour).

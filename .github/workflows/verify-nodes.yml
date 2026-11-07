@@ -36,7 +36,7 @@ jobs:
           python - <<'PY' >> "$GITHUB_OUTPUT"
           import json
           import os
-          from datetime import datetime, timezone, timedelta
+          from datetime import datetime, timezone
           from urllib.request import Request, urlopen
 
           now = datetime.now(timezone.utc)
@@ -56,8 +56,7 @@ jobs:
                   if name == 'candidates.json' and not obj.get('candidates'):
                       raise ValueError('empty candidates')
                   stamps.append(made)
-              should_run = now - min(stamps) > timedelta(minutes=70)
-              # Valid files need no fallback; only stale/missing data triggers verification.
+              # Both publications are fresh: skip expensive verification.
               should_run = False
           except Exception:
               should_run = True

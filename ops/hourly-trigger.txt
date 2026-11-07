@@ -1,2 +1,2 @@
-Fallback verification trigger: 2026-11-07T06:18:00Z
-Reason: candidates.json expired at 2026-11-07T06:15:19Z; last successful workflow completed at 2026-11-07T04:16:15Z; no active runs in latest GitHub Actions listing.
+Fallback verification trigger: 2026-11-07T11:13:01Z
+Reason: candidates.json expired at 2026-11-07T10:58:19Z; last successful publication completed at 2026-11-07T08:59:24Z; no active runs in latest Actions listing. Previous fallback trigger was 2026-11-07T06:18:00Z.

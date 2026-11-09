@@ -1,2 +1,2 @@
-Fallback verification trigger: 2026-11-09T05:15:32Z
-Reason: candidates.json expired at 2026-11-09T04:47:36Z; feed.json remains valid until 2026-11-09T08:47:36Z. Last full run #175 completed successfully at 2026-11-09T02:48:30Z; no active runs in latest listing. Previous fallback push #174 at 2026-11-09T01:14:30Z (>1 hour ago).
+Fallback verification trigger: 2026-11-09T09:25:37Z
+Reason: candidates.json expired at 2026-11-09T07:16:41Z; feed.json remains valid until 2026-11-09T11:16:41Z. Last full run #176 completed successfully at 2026-11-09T05:17:45Z; latest #177 was freshness-only; no active runs in latest listing. Previous fallback push #176 at 2026-11-09T05:16:28Z (>1 hour ago).

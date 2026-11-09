@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
   schedule:
     - cron: '23 * * * *'
-    - cron: '53 * * * *'  # cheap freshness-only fallback; full checks only when expired
+    - cron: '53 * * * *'  # freshness fallback; full checks before candidate expiry
   push:
     branches: [main]
     paths: ['checker.py', 'tests/**', '.github/workflows/verify-nodes.yml', 'ops/hourly-trigger.txt']
@@ -20,7 +20,7 @@ jobs:
     outputs:
       run_checks: ${{ steps.gate.outputs.run_checks }}
     steps:
-      - name: Avoid duplicate expensive verification on fallback schedule
+      - name: Gate scheduled verification by age and expiry
         id: gate
         shell: bash
         env:
@@ -29,20 +29,22 @@ jobs:
           REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
-          if [[ "$EVENT_NAME" != schedule || "$SCHEDULE" != '53 * * * *' ]]; then
+          if [[ "$EVENT_NAME" != schedule ]]; then
             echo 'run_checks=true' >> "$GITHUB_OUTPUT"
             exit 0
           fi
           python - <<'PY' >> "$GITHUB_OUTPUT"
           import json
           import os
-          from datetime import datetime, timezone
+          from datetime import datetime, timedelta, timezone
           from urllib.request import Request, urlopen
-
+          
           now = datetime.now(timezone.utc)
           try:
               base = 'https://raw.githubusercontent.com/' + os.environ['REPOSITORY'] + '/main/'
-              stamps = []
+              generated = []
+              candidate_expiry = None
+              required = {'fingerprint', 'source_id', 'uri', 'https_latency_ms', 'youtube_page_ok', 'checked_at'}
               for name in ('feed.json', 'candidates.json'):
                   req = Request(base + name, headers={'Cache-Control': 'no-cache'})
                   with urlopen(req, timeout=8) as response:
@@ -51,15 +53,30 @@ jobs:
                       raise ValueError('invalid schema')
                   made = datetime.fromisoformat(obj['generated_at'].replace('Z', '+00:00'))
                   expiry = datetime.fromisoformat(obj['valid_until'].replace('Z', '+00:00'))
-                  if not made <= now < expiry:
-                      raise ValueError('stale JSON')
-                  if name == 'candidates.json' and not obj.get('candidates'):
-                      raise ValueError('empty candidates')
-                  stamps.append(made)
-              # Both publications are fresh: skip expensive verification.
-              should_run = False
+                  if made.tzinfo is None or expiry.tzinfo is None or not made <= now < expiry:
+                      raise ValueError('stale or invalid JSON dates')
+                  if name == 'feed.json':
+                      if not isinstance(obj.get('results'), list):
+                          raise ValueError('invalid feed results')
+                  else:
+                      entries = obj.get('candidates')
+                      if not isinstance(entries, list) or not entries:
+                          raise ValueError('empty candidates')
+                      if any(not isinstance(e, dict) or set(e) != required for e in entries):
+                          raise ValueError('invalid candidates fields')
+                      candidate_expiry = expiry
+                  generated.append(made)
+              if len(set(generated)) != 1:
+                  raise ValueError('mismatched publication timestamps')
+              age = now - generated[0]
+              if age < timedelta(minutes=70):
+                  should_run = False  # Recent verified publication: no duplicate run.
+              elif os.environ['SCHEDULE'] == '53 * * * *':
+                  should_run = candidate_expiry - now <= timedelta(minutes=70)
+              else:
+                  should_run = True  # Hourly :23 schedule when no recent publication.
           except Exception:
-              should_run = True
+              should_run = True  # Missing, expired or malformed data: fail open.
           print('run_checks=' + str(should_run).lower())
           PY
   verify:

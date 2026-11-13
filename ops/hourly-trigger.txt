@@ -1,2 +1,2 @@
-Fallback verification trigger: 2026-11-13T03:21:04Z
-Reason: candidates.json expired at 2026-11-13T03:19:33Z; feed.json valid until 2026-11-13T07:19:33Z. Last full successful verification and Pages deploy run 43344026746 at 2026-11-13T01:20:34Z. Latest scheduled run 43350191048 completed with verify and deploy skipped. No active runs in latest GitHub Actions listing; previous fallback 2026-11-13T01:18:49Z.
+Fallback verification trigger: 2026-11-13T07:25:10Z
+Reason: candidates.json expired at 2026-11-13T05:21:28Z; feed.json valid until 2026-11-13T09:21:28Z. Last full successful verification and Pages deploy run 43358384928 at 2026-11-13T03:22:26Z. Latest scheduled run 43359149788 completed without a fresh publication. No active runs in latest GitHub Actions listing; previous fallback 2026-11-13T03:21:04Z.

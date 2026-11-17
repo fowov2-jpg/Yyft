@@ -1,2 +1,2 @@
-Fallback verification trigger: 2026-11-17T20:17:03Z
-Reason: candidates.json expired at 2026-11-17T20:16:42Z; feed.json valid until 2026-11-18T00:16:42Z. Latest confirmed successful workflow run 44146004149 started 2026-11-17T18:16Z, including Pages deploy. No active runs visible in current workflow listing. Previous fallback push at 2026-11-17T18:16Z (>1 hour). Await new run and Pages deploy confirmation.
+Fallback verification trigger: 2026-11-17T22:20:56Z
+Reason: candidates.json expired at 2026-11-17T22:18:13Z; feed.json valid until 2026-11-18T02:18:13Z. Last run 44176575711 at 21:08Z completed successfully but verify, publish-raw and deploy were skipped; last full publication generated at 20:18:13Z. No active runs in latest Actions listing. Previous fallback push at 20:17:29Z (>2 hours). Await new run and deploy confirmation.
